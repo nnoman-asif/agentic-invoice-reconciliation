@@ -215,14 +215,14 @@ Interactive API docs available at **http://localhost:8000/docs** (Swagger UI).
 ## Agent Pipeline
 
 ```
-+-------------------+     +-------------------+     +-------------------+
-| 1. Parser Agent   |     | 2. Matcher Agent  |     | 3. Anomaly Agent  |
-|                   | --> |                   | --> |                   |
++-------------------+     +--------------------+     +-------------------+
+| 1. Parser Agent   |     | 2. Matcher Agent   |     | 3. Anomaly Agent  |
+|                   | --> |                    | --> |                   |
 | LLM extracts      |     | SQL finds matching |     | Rule engine runs  |
 | structured data   |     | PO & delivery      |     | 8 checks for      |
 | from invoice PDF  |     | receipts, does     |     | discrepancies     |
 |                   |     | 3-way line match   |     |                   |
-+-------------------+     +-------------------+     +--------+----------+
++-------------------+     +--------------------+     +--------+----------+
                                                               |
                                                               v
                                                   +-------------------+
