@@ -1,0 +1,136 @@
+description: Invoice Reconciliation Agent Eval Suite
+
+providers:
+  - id: ollama:chat:qwen2.5:7b
+    config:
+      temperature: 0
+
+prompts:
+  # Parser agent evaluation
+  - id: parser_prompt
+    raw: |
+      You are an invoice data extraction specialist. Given the raw text of an invoice document, extract all relevant structured information.
+
+      You MUST respond with valid JSON only. No additional text or explanation.
+
+      Extract the following fields:
+      {
+        "invoice_number": "the invoice number/ID",
+        "vendor_name": "the vendor/supplier company name",
+        "vendor_tax_id": "vendor tax ID if present, else null",
+        "po_reference": "referenced purchase order number if present, else null",
+        "invoice_date": "YYYY-MM-DD format",
+        "due_date": "YYYY-MM-DD format if present, else null",
+        "total_amount": numeric value (no currency symbol),
+        "tax_amount": numeric value if present, else null,
+        "currency": "3-letter currency code, default USD",
+        "line_items": [
+          {
+            "line_number": 1,
+            "item_code": "item/part code if present, else null",
+            "item_description": "description of the item",
+            "quantity": numeric value,
+            "unit_price": numeric value,
+            "total_price": numeric value,
+            "unit_of_measure": "unit if present, else null"
+          }
+        ]
+      }
+
+      Invoice text:
+      {{input}}
+
+tests:
+  - description: "Parser: Standard invoice with PO reference"
+    vars:
+      input: |
+        INVOICE
+        Invoice #: INV-2026-0142
+        Date: 2026-02-15
+        Due Date: 2026-03-17
+
+        From: Acme Industrial Supplies
+        Tax ID: TAX-ACME-9821
+
+        To: Manufacturing Corp
+        PO Reference: PO-2026-001
+
+        Line Items:
+        1. Steel Bolts M8x50mm Grade 8.8 - Qty: 500 pcs @ $5.50 = $2,750.00
+        2. Hex Nuts M8 Zinc Plated - Qty: 500 pcs @ $2.00 = $1,000.00
+        3. Flat Washers M8 Stainless - Qty: 1000 pcs @ $12.00 = $12,000.00
+
+        Subtotal: $15,750.00
+        Tax (0%): $0.00
+        Total: $15,750.00
+    assert:
+      - type: is-json
+      - type: javascript
+        value: "JSON.parse(output).invoice_number === 'INV-2026-0142'"
+      - type: javascript
+        value: "JSON.parse(output).po_reference === 'PO-2026-001'"
+      - type: javascript
+        value: "JSON.parse(output).total_amount === 15750"
+      - type: javascript
+        value: "JSON.parse(output).line_items.length === 3"
+      - type: javascript
+        value: "JSON.parse(output).vendor_name.includes('Acme')"
+
+  - description: "Parser: Invoice without PO reference"
+    vars:
+      input: |
+        INVOICE #GSC-8834
+        Global Steel Corporation
+        456 Steel Avenue, Pittsburgh, PA 15201
+
+        Date: February 20, 2026
+        Payment Terms: Net 30
+
+        Bill To: Client Manufacturing Inc.
+
+        Description                           Qty    Unit Price    Total
+        Hot Rolled Steel Plate 10mm           20     $1,260.00     $25,200.00
+        Cold Rolled Steel Plate 5mm           30     $800.00       $24,000.00
+
+        Total Due: $49,200.00
+    assert:
+      - type: is-json
+      - type: javascript
+        value: "JSON.parse(output).invoice_number === 'GSC-8834'"
+      - type: javascript
+        value: "JSON.parse(output).po_reference === null || JSON.parse(output).po_reference === undefined"
+      - type: javascript
+        value: "JSON.parse(output).line_items.length === 2"
+      - type: javascript
+        value: "JSON.parse(output).total_amount === 49200"
+
+  - description: "Parser: Invoice with tax and different date format"
+    vars:
+      input: |
+        Precision Parts Manufacturing
+        789 Precision Blvd, Detroit, MI 48201
+        Tax ID: TAX-PPM-7712
+
+        Invoice Number: PPM-INV-2026-055
+        Invoice Date: 01/28/2026
+        Due: 02/27/2026
+        PO: PO-2026-003
+
+        Items:
+        Ball Bearing 6205-2RS    100 pcs x $47.25 = $4,725.00
+        Ball Bearing 6208-2RS     60 pcs x $72.00 = $4,320.00
+        Bearing Seal 6205 Rubber 100 pcs x  $5.40 =   $540.00
+
+        Subtotal: $9,585.00
+        Sales Tax (5%): $479.25
+        TOTAL: $10,064.25
+    assert:
+      - type: is-json
+      - type: javascript
+        value: "JSON.parse(output).invoice_number === 'PPM-INV-2026-055'"
+      - type: javascript
+        value: "JSON.parse(output).po_reference === 'PO-2026-003'"
+      - type: javascript
+        value: "JSON.parse(output).line_items.length === 3"
+      - type: javascript
+        value: "JSON.parse(output).tax_amount !== null && JSON.parse(output).tax_amount > 0"

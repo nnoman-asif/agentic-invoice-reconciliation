@@ -1,0 +1,189 @@
+"""
+Seed the database with sample vendors, purchase orders, and delivery receipts.
+
+Usage:
+    python -m app.db.seed
+"""
+
+import sys
+import uuid
+from datetime import date
+
+import psycopg2
+import psycopg2.extras
+from psycopg2.extras import execute_values
+
+from app.config import settings
+
+# Register UUID adapter so psycopg2 can handle uuid.UUID objects
+psycopg2.extras.register_uuid()
+
+# ── Fixed UUIDs for reproducible references ───────────────────────
+
+VENDOR_IDS = [uuid.uuid4() for _ in range(3)]
+PO_IDS = [uuid.uuid4() for _ in range(5)]
+PO_LINE_IDS = [[uuid.uuid4() for _ in range(3)] for _ in range(5)]
+DR_IDS = [uuid.uuid4() for _ in range(5)]
+
+
+def get_connection():
+    return psycopg2.connect(
+        host=settings.postgres_host,
+        port=settings.postgres_port,
+        dbname=settings.postgres_db,
+        user=settings.postgres_user,
+        password=settings.postgres_password,
+    )
+
+
+def seed_vendors(cur):
+    vendors = [
+        (VENDOR_IDS[0], "Acme Industrial Supplies", "ACME-001", "TAX-ACME-9821",
+         "123 Industrial Park, Houston, TX 77001", "billing@acmeindustrial.com"),
+        (VENDOR_IDS[1], "Global Steel Corporation", "GSC-002", "TAX-GSC-4455",
+         "456 Steel Avenue, Pittsburgh, PA 15201", "accounts@globalsteel.com"),
+        (VENDOR_IDS[2], "Precision Parts Manufacturing", "PPM-003", "TAX-PPM-7712",
+         "789 Precision Blvd, Detroit, MI 48201", "invoices@precisionparts.com"),
+    ]
+    execute_values(
+        cur,
+        """INSERT INTO vendors (id, name, code, tax_id, address, contact_email)
+           VALUES %s ON CONFLICT (code) DO NOTHING""",
+        vendors,
+    )
+    print(f"  [seed] {len(vendors)} vendors inserted.")
+
+
+def seed_purchase_orders(cur):
+    pos = [
+        # PO-1: Acme - fasteners
+        (PO_IDS[0], "PO-2026-001", VENDOR_IDS[0], date(2026, 1, 10), date(2026, 2, 10),
+         "issued", 15750.00, "USD", None),
+        # PO-2: Global Steel - steel plates
+        (PO_IDS[1], "PO-2026-002", VENDOR_IDS[1], date(2026, 1, 15), date(2026, 2, 15),
+         "issued", 48200.00, "USD", None),
+        # PO-3: Precision Parts - bearings
+        (PO_IDS[2], "PO-2026-003", VENDOR_IDS[2], date(2026, 1, 20), date(2026, 2, 28),
+         "issued", 9360.00, "USD", None),
+        # PO-4: Acme - safety equipment
+        (PO_IDS[3], "PO-2026-004", VENDOR_IDS[0], date(2026, 2, 1), date(2026, 3, 1),
+         "issued", 6840.00, "USD", None),
+        # PO-5: Global Steel - pipes
+        (PO_IDS[4], "PO-2026-005", VENDOR_IDS[1], date(2026, 2, 5), date(2026, 3, 5),
+         "issued", 32500.00, "USD", None),
+    ]
+    execute_values(
+        cur,
+        """INSERT INTO purchase_orders
+           (id, po_number, vendor_id, issue_date, expected_delivery_date, status, total_amount, currency, notes)
+           VALUES %s ON CONFLICT (po_number) DO NOTHING""",
+        pos,
+    )
+    print(f"  [seed] {len(pos)} purchase orders inserted.")
+
+    # Line items for each PO
+    po_lines = [
+        # PO-1 lines
+        (PO_LINE_IDS[0][0], PO_IDS[0], 1, "BOLT-M8X50", "Steel Bolts M8x50mm Grade 8.8", 500, 5.50, 2750.00, "pcs"),
+        (PO_LINE_IDS[0][1], PO_IDS[0], 2, "NUT-M8",     "Hex Nuts M8 Zinc Plated",        500, 2.00, 1000.00, "pcs"),
+        (PO_LINE_IDS[0][2], PO_IDS[0], 3, "WSHR-M8",    "Flat Washers M8 Stainless",       1000, 12.00, 12000.00, "pcs"),
+        # PO-2 lines
+        (PO_LINE_IDS[1][0], PO_IDS[1], 1, "SP-10MM",  "Hot Rolled Steel Plate 10mm",   20, 1200.00, 24000.00, "sheets"),
+        (PO_LINE_IDS[1][1], PO_IDS[1], 2, "SP-5MM",   "Cold Rolled Steel Plate 5mm",   30, 800.00, 24000.00, "sheets"),
+        (PO_LINE_IDS[1][2], PO_IDS[1], 3, "SC-FLAT",  "Steel Cutting Service - Flat",  1, 200.00, 200.00, "lot"),
+        # PO-3 lines
+        (PO_LINE_IDS[2][0], PO_IDS[2], 1, "BRG-6205",  "Ball Bearing 6205-2RS",       100, 45.00, 4500.00, "pcs"),
+        (PO_LINE_IDS[2][1], PO_IDS[2], 2, "BRG-6208",  "Ball Bearing 6208-2RS",       60, 72.00, 4320.00, "pcs"),
+        (PO_LINE_IDS[2][2], PO_IDS[2], 3, "SEAL-6205", "Bearing Seal 6205 Rubber",    100, 5.40, 540.00, "pcs"),
+        # PO-4 lines
+        (PO_LINE_IDS[3][0], PO_IDS[3], 1, "HELM-001", "Safety Helmet Class E",        50, 45.00, 2250.00, "pcs"),
+        (PO_LINE_IDS[3][1], PO_IDS[3], 2, "GLOV-LRG", "Safety Gloves Leather L",     200, 12.00, 2400.00, "pairs"),
+        (PO_LINE_IDS[3][2], PO_IDS[3], 3, "GOGL-CLR", "Safety Goggles Clear Lens",   100, 21.90, 2190.00, "pcs"),
+        # PO-5 lines
+        (PO_LINE_IDS[4][0], PO_IDS[4], 1, "PIPE-4IN",  "Steel Pipe 4in Schedule 40",  50, 350.00, 17500.00, "lengths"),
+        (PO_LINE_IDS[4][1], PO_IDS[4], 2, "PIPE-2IN",  "Steel Pipe 2in Schedule 40",  60, 200.00, 12000.00, "lengths"),
+        (PO_LINE_IDS[4][2], PO_IDS[4], 3, "FLNG-4IN",  "Pipe Flange 4in 150lb",       20, 150.00, 3000.00, "pcs"),
+    ]
+    execute_values(
+        cur,
+        """INSERT INTO po_line_items
+           (id, po_id, line_number, item_code, item_description, quantity, unit_price, total_price, unit_of_measure)
+           VALUES %s ON CONFLICT (po_id, line_number) DO NOTHING""",
+        po_lines,
+    )
+    print(f"  [seed] {len(po_lines)} PO line items inserted.")
+
+
+def seed_delivery_receipts(cur):
+    receipts = [
+        # Full delivery for PO-1
+        (DR_IDS[0], "REC-2026-001", PO_IDS[0], date(2026, 2, 8), "John Smith", "received", None),
+        # Full delivery for PO-2
+        (DR_IDS[1], "REC-2026-002", PO_IDS[1], date(2026, 2, 14), "Jane Doe", "received", None),
+        # Partial delivery for PO-3 (80% of bearings)
+        (DR_IDS[2], "REC-2026-003", PO_IDS[2], date(2026, 2, 25), "Mike Johnson", "partial",
+         "80 of 100 bearings 6205 received; full qty for 6208 and seals"),
+        # Full delivery for PO-4
+        (DR_IDS[3], "REC-2026-004", PO_IDS[3], date(2026, 2, 28), "Sarah Lee", "received", None),
+        # Full delivery for PO-5
+        (DR_IDS[4], "REC-2026-005", PO_IDS[4], date(2026, 3, 3), "Tom Wilson", "received", None),
+    ]
+    execute_values(
+        cur,
+        """INSERT INTO delivery_receipts
+           (id, receipt_number, po_id, received_date, receiver_name, status, notes)
+           VALUES %s ON CONFLICT (receipt_number) DO NOTHING""",
+        receipts,
+    )
+    print(f"  [seed] {len(receipts)} delivery receipts inserted.")
+
+    dr_lines = [
+        # REC-1: full delivery of PO-1
+        (uuid.uuid4(), DR_IDS[0], PO_LINE_IDS[0][0], "Steel Bolts M8x50mm Grade 8.8", 500, 500, 0),
+        (uuid.uuid4(), DR_IDS[0], PO_LINE_IDS[0][1], "Hex Nuts M8 Zinc Plated",        500, 500, 0),
+        (uuid.uuid4(), DR_IDS[0], PO_LINE_IDS[0][2], "Flat Washers M8 Stainless",       1000, 1000, 0),
+        # REC-2: full delivery of PO-2
+        (uuid.uuid4(), DR_IDS[1], PO_LINE_IDS[1][0], "Hot Rolled Steel Plate 10mm", 20, 20, 0),
+        (uuid.uuid4(), DR_IDS[1], PO_LINE_IDS[1][1], "Cold Rolled Steel Plate 5mm", 30, 30, 0),
+        (uuid.uuid4(), DR_IDS[1], PO_LINE_IDS[1][2], "Steel Cutting Service - Flat", 1, 1, 0),
+        # REC-3: partial delivery of PO-3
+        (uuid.uuid4(), DR_IDS[2], PO_LINE_IDS[2][0], "Ball Bearing 6205-2RS",   80, 80, 0),   # 80 of 100
+        (uuid.uuid4(), DR_IDS[2], PO_LINE_IDS[2][1], "Ball Bearing 6208-2RS",   60, 60, 0),
+        (uuid.uuid4(), DR_IDS[2], PO_LINE_IDS[2][2], "Bearing Seal 6205 Rubber", 100, 100, 0),
+        # REC-4: full delivery of PO-4
+        (uuid.uuid4(), DR_IDS[3], PO_LINE_IDS[3][0], "Safety Helmet Class E",     50, 50, 0),
+        (uuid.uuid4(), DR_IDS[3], PO_LINE_IDS[3][1], "Safety Gloves Leather L",   200, 200, 0),
+        (uuid.uuid4(), DR_IDS[3], PO_LINE_IDS[3][2], "Safety Goggles Clear Lens", 100, 100, 0),
+        # REC-5: full delivery of PO-5
+        (uuid.uuid4(), DR_IDS[4], PO_LINE_IDS[4][0], "Steel Pipe 4in Schedule 40", 50, 50, 0),
+        (uuid.uuid4(), DR_IDS[4], PO_LINE_IDS[4][1], "Steel Pipe 2in Schedule 40", 60, 60, 0),
+        (uuid.uuid4(), DR_IDS[4], PO_LINE_IDS[4][2], "Pipe Flange 4in 150lb",      20, 20, 0),
+    ]
+    execute_values(
+        cur,
+        """INSERT INTO delivery_line_items
+           (id, receipt_id, po_line_item_id, item_description, quantity_received, quantity_accepted, quantity_rejected)
+           VALUES %s ON CONFLICT DO NOTHING""",
+        dr_lines,
+    )
+    print(f"  [seed] {len(dr_lines)} delivery line items inserted.")
+
+
+def seed_all():
+    conn = get_connection()
+    conn.autocommit = True
+    try:
+        with conn.cursor() as cur:
+            seed_vendors(cur)
+            seed_purchase_orders(cur)
+            seed_delivery_receipts(cur)
+        print("\n[seed] Database seeding complete.")
+    except Exception as e:
+        print(f"[seed] Error: {e}")
+        sys.exit(1)
+    finally:
+        conn.close()
+
+
+if __name__ == "__main__":
+    seed_all()

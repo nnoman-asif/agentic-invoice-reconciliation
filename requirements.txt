@@ -1,0 +1,43 @@
+# Core Framework
+fastapi[standard]
+uvicorn[standard]
+pydantic>=2.0
+pydantic-settings
+
+# Database
+sqlalchemy[asyncio]
+asyncpg
+psycopg2-binary
+pgvector
+alembic
+
+# Redis
+redis[hiredis]
+
+# LLM & Agents
+langchain
+langchain-community
+langchain-core
+langgraph
+langgraph-checkpoint
+langgraph-checkpoint-postgres
+llama-index
+llama-index-core
+llama-index-readers-file
+
+# Ollama
+langchain-ollama
+ollama
+
+# PDF Processing
+PyMuPDF
+
+# Observability
+langfuse
+
+# Utilities
+python-multipart
+python-dotenv
+httpx
+tenacity
+numpy

@@ -1,0 +1,67 @@
+[
+  {
+    "po_number": "PO-2026-001",
+    "vendor": "Acme Industrial Supplies",
+    "vendor_code": "ACME-001",
+    "issue_date": "2026-01-10",
+    "status": "issued",
+    "total_amount": 15750.00,
+    "line_items": [
+      {"line": 1, "code": "BOLT-M8X50", "description": "Steel Bolts M8x50mm Grade 8.8", "qty": 500, "unit_price": 5.50, "total": 2750.00, "uom": "pcs"},
+      {"line": 2, "code": "NUT-M8", "description": "Hex Nuts M8 Zinc Plated", "qty": 500, "unit_price": 2.00, "total": 1000.00, "uom": "pcs"},
+      {"line": 3, "code": "WSHR-M8", "description": "Flat Washers M8 Stainless", "qty": 1000, "unit_price": 12.00, "total": 12000.00, "uom": "pcs"}
+    ]
+  },
+  {
+    "po_number": "PO-2026-002",
+    "vendor": "Global Steel Corporation",
+    "vendor_code": "GSC-002",
+    "issue_date": "2026-01-15",
+    "status": "issued",
+    "total_amount": 48200.00,
+    "line_items": [
+      {"line": 1, "code": "SP-10MM", "description": "Hot Rolled Steel Plate 10mm", "qty": 20, "unit_price": 1200.00, "total": 24000.00, "uom": "sheets"},
+      {"line": 2, "code": "SP-5MM", "description": "Cold Rolled Steel Plate 5mm", "qty": 30, "unit_price": 800.00, "total": 24000.00, "uom": "sheets"},
+      {"line": 3, "code": "SC-FLAT", "description": "Steel Cutting Service - Flat", "qty": 1, "unit_price": 200.00, "total": 200.00, "uom": "lot"}
+    ]
+  },
+  {
+    "po_number": "PO-2026-003",
+    "vendor": "Precision Parts Manufacturing",
+    "vendor_code": "PPM-003",
+    "issue_date": "2026-01-20",
+    "status": "issued",
+    "total_amount": 9360.00,
+    "line_items": [
+      {"line": 1, "code": "BRG-6205", "description": "Ball Bearing 6205-2RS", "qty": 100, "unit_price": 45.00, "total": 4500.00, "uom": "pcs"},
+      {"line": 2, "code": "BRG-6208", "description": "Ball Bearing 6208-2RS", "qty": 60, "unit_price": 72.00, "total": 4320.00, "uom": "pcs"},
+      {"line": 3, "code": "SEAL-6205", "description": "Bearing Seal 6205 Rubber", "qty": 100, "unit_price": 5.40, "total": 540.00, "uom": "pcs"}
+    ]
+  },
+  {
+    "po_number": "PO-2026-004",
+    "vendor": "Acme Industrial Supplies",
+    "vendor_code": "ACME-001",
+    "issue_date": "2026-02-01",
+    "status": "issued",
+    "total_amount": 6840.00,
+    "line_items": [
+      {"line": 1, "code": "HELM-001", "description": "Safety Helmet Class E", "qty": 50, "unit_price": 45.00, "total": 2250.00, "uom": "pcs"},
+      {"line": 2, "code": "GLOV-LRG", "description": "Safety Gloves Leather L", "qty": 200, "unit_price": 12.00, "total": 2400.00, "uom": "pairs"},
+      {"line": 3, "code": "GOGL-CLR", "description": "Safety Goggles Clear Lens", "qty": 100, "unit_price": 21.90, "total": 2190.00, "uom": "pcs"}
+    ]
+  },
+  {
+    "po_number": "PO-2026-005",
+    "vendor": "Global Steel Corporation",
+    "vendor_code": "GSC-002",
+    "issue_date": "2026-02-05",
+    "status": "issued",
+    "total_amount": 32500.00,
+    "line_items": [
+      {"line": 1, "code": "PIPE-4IN", "description": "Steel Pipe 4in Schedule 40", "qty": 50, "unit_price": 350.00, "total": 17500.00, "uom": "lengths"},
+      {"line": 2, "code": "PIPE-2IN", "description": "Steel Pipe 2in Schedule 40", "qty": 60, "unit_price": 200.00, "total": 12000.00, "uom": "lengths"},
+      {"line": 3, "code": "FLNG-4IN", "description": "Pipe Flange 4in 150lb", "qty": 20, "unit_price": 150.00, "total": 3000.00, "uom": "pcs"}
+    ]
+  }
+]

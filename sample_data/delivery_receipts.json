@@ -1,0 +1,67 @@
+[
+  {
+    "receipt_number": "REC-2026-001",
+    "po_number": "PO-2026-001",
+    "received_date": "2026-02-08",
+    "receiver": "John Smith",
+    "status": "received",
+    "note": "Full delivery, all items inspected and accepted",
+    "line_items": [
+      {"description": "Steel Bolts M8x50mm Grade 8.8", "qty_received": 500, "qty_accepted": 500, "qty_rejected": 0},
+      {"description": "Hex Nuts M8 Zinc Plated", "qty_received": 500, "qty_accepted": 500, "qty_rejected": 0},
+      {"description": "Flat Washers M8 Stainless", "qty_received": 1000, "qty_accepted": 1000, "qty_rejected": 0}
+    ]
+  },
+  {
+    "receipt_number": "REC-2026-002",
+    "po_number": "PO-2026-002",
+    "received_date": "2026-02-14",
+    "receiver": "Jane Doe",
+    "status": "received",
+    "note": "Full delivery",
+    "line_items": [
+      {"description": "Hot Rolled Steel Plate 10mm", "qty_received": 20, "qty_accepted": 20, "qty_rejected": 0},
+      {"description": "Cold Rolled Steel Plate 5mm", "qty_received": 30, "qty_accepted": 30, "qty_rejected": 0},
+      {"description": "Steel Cutting Service - Flat", "qty_received": 1, "qty_accepted": 1, "qty_rejected": 0}
+    ]
+  },
+  {
+    "receipt_number": "REC-2026-003",
+    "po_number": "PO-2026-003",
+    "received_date": "2026-02-25",
+    "receiver": "Mike Johnson",
+    "status": "partial",
+    "note": "Only 80 of 100 Ball Bearing 6205 received. Full qty for 6208 and seals.",
+    "line_items": [
+      {"description": "Ball Bearing 6205-2RS", "qty_received": 80, "qty_accepted": 80, "qty_rejected": 0},
+      {"description": "Ball Bearing 6208-2RS", "qty_received": 60, "qty_accepted": 60, "qty_rejected": 0},
+      {"description": "Bearing Seal 6205 Rubber", "qty_received": 100, "qty_accepted": 100, "qty_rejected": 0}
+    ]
+  },
+  {
+    "receipt_number": "REC-2026-004",
+    "po_number": "PO-2026-004",
+    "received_date": "2026-02-28",
+    "receiver": "Sarah Lee",
+    "status": "received",
+    "note": "Full delivery of safety equipment",
+    "line_items": [
+      {"description": "Safety Helmet Class E", "qty_received": 50, "qty_accepted": 50, "qty_rejected": 0},
+      {"description": "Safety Gloves Leather L", "qty_received": 200, "qty_accepted": 200, "qty_rejected": 0},
+      {"description": "Safety Goggles Clear Lens", "qty_received": 100, "qty_accepted": 100, "qty_rejected": 0}
+    ]
+  },
+  {
+    "receipt_number": "REC-2026-005",
+    "po_number": "PO-2026-005",
+    "received_date": "2026-03-03",
+    "receiver": "Tom Wilson",
+    "status": "received",
+    "note": "Full delivery of pipe and fittings",
+    "line_items": [
+      {"description": "Steel Pipe 4in Schedule 40", "qty_received": 50, "qty_accepted": 50, "qty_rejected": 0},
+      {"description": "Steel Pipe 2in Schedule 40", "qty_received": 60, "qty_accepted": 60, "qty_rejected": 0},
+      {"description": "Pipe Flange 4in 150lb", "qty_received": 20, "qty_accepted": 20, "qty_rejected": 0}
+    ]
+  }
+]
