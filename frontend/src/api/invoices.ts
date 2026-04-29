@@ -1,0 +1,107 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { apiClient } from "./client"
+import type {
+  Invoice,
+  InvoiceListItem,
+  InvoiceUploadResponse,
+  Reconciliation,
+} from "./types"
+
+export const invoiceKeys = {
+  all: ["invoices"] as const,
+  lists: () => [...invoiceKeys.all, "list"] as const,
+  list: (filters?: Record<string, string>) =>
+    [...invoiceKeys.lists(), filters] as const,
+  details: () => [...invoiceKeys.all, "detail"] as const,
+  detail: (id: string) => [...invoiceKeys.details(), id] as const,
+  reconciliation: (id: string) =>
+    [...invoiceKeys.all, "reconciliation", id] as const,
+}
+
+export function useInvoices(filters?: {
+  processing_status?: string
+  business_status?: string
+  vendor_id?: string
+}) {
+  return useQuery({
+    queryKey: invoiceKeys.list(filters),
+    queryFn: async () => {
+      const params = new URLSearchParams()
+      if (filters?.processing_status)
+        params.append("processing_status", filters.processing_status)
+      if (filters?.business_status)
+        params.append("business_status", filters.business_status)
+      if (filters?.vendor_id) params.append("vendor_id", filters.vendor_id)
+
+      const { data } = await apiClient.get<InvoiceListItem[]>(
+        `/api/invoices${params.toString() ? `?${params}` : ""}`
+      )
+      return data
+    },
+    refetchInterval: (query) => {
+      const data = query.state.data
+      const hasProcessing = data?.some(
+        (inv) =>
+          inv.processing_status === "queued" ||
+          inv.processing_status === "parsing" ||
+          inv.processing_status === "matching" ||
+          inv.processing_status === "resolving"
+      )
+      return hasProcessing ? 2000 : false
+    },
+  })
+}
+
+export function useInvoice(id: string | undefined) {
+  return useQuery({
+    queryKey: invoiceKeys.detail(id ?? ""),
+    queryFn: async () => {
+      const { data } = await apiClient.get<Invoice>(`/api/invoices/${id}`)
+      return data
+    },
+    enabled: !!id,
+    refetchInterval: (query) => {
+      const data = query.state.data
+      if (!data) return false
+      const isProcessing =
+        data.processing_status === "queued" ||
+        data.processing_status === "parsing" ||
+        data.processing_status === "matching" ||
+        data.processing_status === "resolving"
+      return isProcessing ? 1500 : false
+    },
+  })
+}
+
+export function useInvoiceReconciliation(id: string | undefined) {
+  return useQuery({
+    queryKey: invoiceKeys.reconciliation(id ?? ""),
+    queryFn: async () => {
+      const { data } = await apiClient.get<Reconciliation>(
+        `/api/invoices/${id}/reconciliation`
+      )
+      return data
+    },
+    enabled: !!id,
+    retry: false,
+  })
+}
+
+export function useUploadInvoice() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const form = new FormData()
+      form.append("file", file)
+      const { data } = await apiClient.post<InvoiceUploadResponse>(
+        "/api/invoices/upload",
+        form,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      )
+      return data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: invoiceKeys.lists() })
+    },
+  })
+}

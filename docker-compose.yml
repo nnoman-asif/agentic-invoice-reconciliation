@@ -50,6 +50,17 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: http://localhost:8000
+    container_name: ira_frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - app
+
   # --- Observability (optional, Langfuse v3) ---
   langfuse-db:
     image: postgres:17-alpine

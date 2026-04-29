@@ -1,6 +1,6 @@
 # Agentic Invoice Reconciliation
 
-A production-grade, multi-agent system that automates 3-way invoice matching (Purchase Order vs Invoice vs Delivery Receipt) using LangGraph, with human-in-the-loop for exceptions, RAG over historical decisions, and full observability.
+A production-grade, full-stack multi-agent system that automates 3-way invoice matching (Purchase Order vs Invoice vs Delivery Receipt) using LangGraph, with human-in-the-loop for exceptions, RAG over historical decisions, full observability via Langfuse, and an Apple-quality React frontend featuring a live pipeline visualizer, side-by-side document comparison, and a 3D reconciliation flow.
 
 ## Architecture
 
@@ -48,6 +48,8 @@ Infrastructure: PostgreSQL+pgvector | Redis | Ollama (Qwen 2.5 7B) | Langfuse
 
 ## Tech Stack
 
+### Backend
+
 | Layer | Technology | Purpose |
 |---|---|---|
 | LLM | Qwen 2.5 7B (via Ollama) | Invoice parsing, resolution recommendations |
@@ -60,7 +62,22 @@ Infrastructure: PostgreSQL+pgvector | Redis | Ollama (Qwen 2.5 7B) | Langfuse
 | Eval | Promptfoo | LLM output evaluation and regression testing |
 | Deployment | Docker + Docker Compose | Containerized services |
 
+### Frontend
+
+| Layer | Technology | Purpose |
+|---|---|---|
+| Build tool | Vite 5 | Lightning-fast dev server |
+| Framework | React 18 + TypeScript | Type-safe UI with FastAPI types mirrored |
+| Styling | TailwindCSS + shadcn/ui | Apple-quality component library |
+| Animations | Framer Motion | Spring physics, page transitions |
+| 3D | React Three Fiber + drei | Three.js with React |
+| Server state | TanStack Query | Auto-caching, polling, mutations |
+| Charts | Tremor / custom | Match rate, processing time, discrepancies |
+| PDF | react-pdf | PDF rendering for compare view |
+
 ## Features
+
+### Backend
 
 - **Stateful Multi-Agent Pipeline**: 4 specialized agents (Parser, Matcher, Anomaly, Resolution) orchestrated via LangGraph with conditional routing and error handling
 - **3-Way Line-Item Matching**: Compares invoice line items against PO and delivery receipt data at the individual line level
@@ -69,6 +86,16 @@ Infrastructure: PostgreSQL+pgvector | Redis | Ollama (Qwen 2.5 7B) | Langfuse
 - **RAG Over Historical Decisions**: Past reconciliation outcomes are embedded and retrieved to improve future recommendations
 - **Full Observability**: Every agent step traced via Langfuse with processing time metrics
 - **Production-Ready**: Docker deployment, async processing, Redis queuing, health checks
+
+### Frontend
+
+- **Apple-quality UI**: Light/dark mode with system-aware toggle, generous whitespace, soft shadows, frosted glass effects, spring-physics animations
+- **Live Pipeline Visualizer**: Watch each agent execute in real-time with timing and click any stage to inspect its output
+- **Side-by-Side Document Compare**: PDF viewer next to matched PO/delivery data with animated SVG match lines
+- **3D Reconciliation Flow**: Cinematic Three.js scene of invoices flowing through the pipeline
+- **Cmd+K Command Palette**: Global search and navigation
+- **Real-time Updates**: TanStack Query polls for status changes during processing
+- **Mobile-Responsive**: Works on phones, tablets, and desktops
 
 ## Database Schema
 
@@ -135,7 +162,7 @@ pip install reportlab
 python -m sample_data.generate_sample_pdfs
 ```
 
-### 5. Start the application
+### 5. Start the backend
 
 ```bash
 # Terminal 1: FastAPI server
@@ -145,11 +172,34 @@ uvicorn app.main:app --reload --port 8000
 python -m app.worker
 ```
 
-### 6. (Optional) Start Langfuse for observability
+### 6. Start the frontend
+
+```bash
+# Terminal 3: Vite dev server
+cd frontend
+npm install
+npm run dev
+```
+
+Open **http://localhost:5173** in your browser.
+
+### 7. (Optional) Start Langfuse for observability
 
 ```bash
 docker compose --profile observability up -d
 # Langfuse UI at http://localhost:3000
+# Note: this conflicts with the frontend Docker service on port 3000
+# Run frontend in dev mode (npm run dev on 5173) when using observability profile
+```
+
+### Full Docker setup (alternative)
+
+To run everything in containers:
+
+```bash
+docker compose up -d
+# Frontend: http://localhost:3000
+# Backend:  http://localhost:8000
 ```
 
 ## API Reference
@@ -253,63 +303,50 @@ Tests cover:
 ## Project Structure
 
 ```
-Invoice_Reconciliation_Agent/
-├── app/
-│   ├── main.py                     # FastAPI app entrypoint
+agentic-invoice-reconciliation/
+├── app/                            # FastAPI backend
+│   ├── main.py                     # App entrypoint with CORS + static files
 │   ├── config.py                   # Settings via pydantic-settings
 │   ├── worker.py                   # Redis queue consumer
-│   ├── api/
-│   │   ├── routes/
-│   │   │   ├── invoices.py         # Upload, list, detail, reconciliation
-│   │   │   ├── purchase_orders.py  # CRUD for purchase orders
-│   │   │   ├── delivery_receipts.py# CRUD for delivery receipts
-│   │   │   ├── exceptions.py       # Human approve/reject endpoints
-│   │   │   ├── dashboard.py        # Aggregation stats
-│   │   │   └── health.py           # Service health check
-│   │   └── webhooks/
-│   │       └── invoice_webhook.py  # External processing trigger
-│   ├── agents/
-│   │   ├── state.py                # LangGraph state definition
-│   │   ├── graph.py                # State machine (nodes + edges)
-│   │   ├── parser_agent.py         # LLM-based PDF data extraction
-│   │   ├── matcher_agent.py        # PO/receipt 3-way matching
-│   │   ├── anomaly_agent.py        # Rule-based discrepancy detection
-│   │   └── resolution_agent.py     # LLM+RAG approval decision
-│   ├── tools/
-│   │   ├── pdf_extractor.py        # PyMuPDF text extraction
-│   │   ├── db_queries.py           # Vendor/PO/receipt lookups
-│   │   ├── matching_logic.py       # 3-way line-item matching algorithm
-│   │   └── anomaly_checks.py       # 8 anomaly detection rules
-│   ├── rag/
-│   │   ├── embeddings.py           # Ollama embedding generation
-│   │   ├── indexer.py              # Store reconciliations in pgvector
-│   │   └── retriever.py            # Similar case retrieval
-│   ├── models/
-│   │   ├── database.py             # SQLAlchemy ORM models (12 tables)
-│   │   └── schemas.py              # Pydantic request/response schemas
-│   ├── db/
-│   │   ├── setup_db.py             # Raw SQL table creation script
-│   │   ├── session.py              # Async DB session factory
-│   │   └── seed.py                 # Sample data seeder
-│   ├── services/
-│   │   ├── invoice_service.py      # Pipeline orchestration + DB persistence
-│   │   └── reconciliation_service.py # Human review + RAG indexing
-│   └── observability/
-│       └── tracing.py              # Langfuse v3 integration
-├── eval/
-│   └── promptfoo.yaml              # LLM evaluation config + test cases
-├── sample_data/
-│   ├── invoices/                   # 3 generated sample invoice PDFs
-│   ├── purchase_orders.json        # 5 sample POs with line items
-│   ├── delivery_receipts.json      # 5 sample receipts
-│   └── generate_sample_pdfs.py     # PDF generation script
-├── tests/
-│   └── conftest.py                 # Pytest fixtures
-├── docker-compose.yml              # PostgreSQL, Redis, Langfuse v3
-├── Dockerfile                      # Python 3.11 container
-├── requirements.txt                # Python dependencies
-├── .env.example                    # Environment variable template
+│   ├── api/routes/                 # 6 route modules + webhook
+│   ├── agents/                     # LangGraph state machine + 4 agents
+│   ├── tools/                      # PDF extraction, DB queries, matching, anomalies
+│   ├── rag/                        # Embeddings, indexer, retriever
+│   ├── models/                     # SQLAlchemy ORM + Pydantic schemas
+│   ├── db/                         # Raw SQL setup, async session, seeder
+│   ├── services/                   # Invoice + reconciliation orchestration
+│   └── observability/              # Langfuse v3 tracing
+├── frontend/                       # React + Vite frontend
+│   ├── src/
+│   │   ├── api/                    # TanStack Query hooks per resource
+│   │   ├── components/
+│   │   │   ├── ui/                 # shadcn/ui primitives
+│   │   │   ├── layout/             # Sidebar, TopBar, ThemeToggle, CommandPalette
+│   │   │   ├── invoice/            # Status badges, upload zone, table, line matches
+│   │   │   ├── pipeline/           # Live agent visualizer (Wow #1)
+│   │   │   ├── compare/            # Side-by-side document compare (Wow #2)
+│   │   │   ├── flow/               # 3D Three.js scene (Wow #3)
+│   │   │   ├── dashboard/          # Stat cards, charts, activity feed
+│   │   │   └── shared/             # PageHeader, AnimatedNumber, ConfidenceBar, etc.
+│   │   ├── pages/                  # 10 routed pages
+│   │   ├── hooks/                  # useTheme, useLivePipeline
+│   │   ├── lib/                    # cn(), format helpers, route constants
+│   │   ├── store/                  # Zustand UI state
+│   │   └── styles/globals.css      # Tailwind + design tokens
+│   ├── package.json
+│   ├── vite.config.ts
+│   ├── tailwind.config.ts
+│   ├── Dockerfile                  # Multi-stage build with nginx
+│   └── nginx.conf                  # SPA routing + caching
+├── eval/promptfoo.yaml             # LLM eval suite
+├── sample_data/                    # Sample PDFs and JSON seed data
+├── tests/conftest.py               # Pytest fixtures
+├── docker-compose.yml              # All services (incl. frontend + Langfuse profile)
+├── Dockerfile                      # Backend Python container
+├── requirements.txt
+├── .env.example
 ├── .gitignore
+├── LICENSE
 └── README.md
 ```
 
