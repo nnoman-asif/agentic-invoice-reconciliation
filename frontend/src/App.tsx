@@ -1,8 +1,10 @@
-import { Routes, Route, Navigate } from "react-router-dom"
+import { Routes, Route } from "react-router-dom"
 import { AnimatePresence } from "framer-motion"
 
 import { AppShell } from "@/components/layout/AppShell"
 import { CommandPalette } from "@/components/layout/CommandPalette"
+import { ErrorBoundary } from "@/components/shared/ErrorBoundary"
+import { PageLoadingBar } from "@/components/shared/PageLoadingBar"
 import { ROUTES } from "@/lib/routes"
 import { useTheme } from "@/hooks/useTheme"
 
@@ -16,12 +18,14 @@ import { FlowPage } from "@/pages/FlowPage"
 import { ExceptionsPage } from "@/pages/ExceptionsPage"
 import { PurchaseOrdersPage } from "@/pages/PurchaseOrdersPage"
 import { SettingsPage } from "@/pages/SettingsPage"
+import { NotFoundPage } from "@/pages/NotFoundPage"
 
 export default function App() {
   useTheme() // initialize theme
 
   return (
-    <>
+    <ErrorBoundary>
+      <PageLoadingBar />
       <CommandPalette />
       <AnimatePresence mode="wait">
         <Routes>
@@ -45,9 +49,9 @@ export default function App() {
             <Route path={ROUTES.settings} element={<SettingsPage />} />
           </Route>
 
-          <Route path="*" element={<Navigate to={ROUTES.dashboard} replace />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </AnimatePresence>
-    </>
+    </ErrorBoundary>
   )
 }

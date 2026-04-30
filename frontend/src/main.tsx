@@ -6,28 +6,31 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 import { Toaster } from "sonner"
 
 import App from "./App"
+import { ErrorBoundary } from "@/components/shared/ErrorBoundary"
 import { queryClient } from "@/api/client"
 import "./styles/globals.css"
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <TooltipProvider delayDuration={200}>
-          <App />
-          <Toaster
-            position="top-right"
-            theme="system"
-            richColors
-            closeButton
-            toastOptions={{
-              classNames: {
-                toast: "rounded-xl border-border/60",
-              },
-            }}
-          />
-        </TooltipProvider>
-      </BrowserRouter>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <TooltipProvider delayDuration={200}>
+            <App />
+            <Toaster
+              position="top-right"
+              theme="system"
+              richColors
+              closeButton
+              toastOptions={{
+                classNames: {
+                  toast: "rounded-xl border-border/60",
+                },
+              }}
+            />
+          </TooltipProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
+    </ErrorBoundary>
   </React.StrictMode>
 )
