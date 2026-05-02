@@ -1,7 +1,13 @@
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
-import { motion } from "framer-motion"
-import { AlertTriangle, CheckCircle2, XCircle, ArrowRight } from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
+import {
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
+  ArrowRight,
+  X,
+} from "lucide-react"
 import { toast } from "sonner"
 
 import { PageHeader } from "@/components/shared/PageHeader"
@@ -11,6 +17,7 @@ import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -29,64 +36,208 @@ import {
 import { useReconciliationByInvoice } from "@/api/reconciliations"
 import { formatCurrency, formatRelative, shortId } from "@/lib/format"
 import type { InvoiceListItem } from "@/api/types"
+import { cn } from "@/lib/utils"
 
-type DialogState = {
-  open: boolean
-  type: "approve" | "reject"
-  invoiceId: string | null
-  reconciliationId: string | null
-}
+type ActionType = "approve" | "reject"
+
+type DialogState =
+  | { open: false }
+  | {
+      open: true
+      type: ActionType
+      // Single mode
+      reconciliationId?: string
+      // Bulk mode
+      reconciliationIds?: string[]
+    }
 
 export function ExceptionsPage() {
   const { data: invoices, isLoading } = useExceptions()
-  const [dialog, setDialog] = useState<DialogState>({
-    open: false,
-    type: "approve",
-    invoiceId: null,
-    reconciliationId: null,
-  })
+  const [dialog, setDialog] = useState<DialogState>({ open: false })
   const [notes, setNotes] = useState("")
   const [decidedBy, setDecidedBy] = useState("admin")
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  // Map invoice_id -> reconciliation_id (collected as cards mount)
+  const [reconMap, setReconMap] = useState<Record<string, string>>({})
 
   const approveMut = useApproveException()
   const rejectMut = useRejectException()
 
+  // Reset selection when invoice list changes
+  useEffect(() => {
+    if (!invoices) return
+    setSelected((prev) => {
+      const valid = new Set(invoices.map((i) => i.id))
+      const next = new Set([...prev].filter((id) => valid.has(id)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [invoices])
+
+  const selectedReconciliationIds = useMemo(
+    () =>
+      [...selected]
+        .map((invoiceId) => reconMap[invoiceId])
+        .filter((id): id is string => !!id),
+    [selected, reconMap]
+  )
+
+  const allSelectableIds = useMemo(
+    () => (invoices ?? []).map((i) => i.id),
+    [invoices]
+  )
+  const allSelected =
+    allSelectableIds.length > 0 && selected.size === allSelectableIds.length
+
   const closeDialog = () => {
-    setDialog({ ...dialog, open: false })
+    setDialog({ open: false })
     setNotes("")
   }
 
-  const submit = async () => {
-    if (!dialog.reconciliationId) return
-    try {
-      const args = {
-        reconciliationId: dialog.reconciliationId,
-        body: { reviewer_notes: notes || null, decided_by: decidedBy || null },
-      }
-      if (dialog.type === "approve") {
-        await approveMut.mutateAsync(args)
-        toast.success("Exception approved", {
-          description: "Invoice has been approved.",
-        })
-      } else {
-        await rejectMut.mutateAsync(args)
-        toast.success("Exception rejected", {
-          description: "Invoice has been rejected.",
-        })
-      }
-      closeDialog()
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : "Action failed"
-      toast.error("Failed", { description: message })
+  const openSingle = (type: ActionType, reconciliationId: string) =>
+    setDialog({ open: true, type, reconciliationId })
+
+  const openBulk = (type: ActionType) => {
+    if (selectedReconciliationIds.length === 0) {
+      toast.warning("Nothing selected", {
+        description: "Pick one or more invoices first.",
+      })
+      return
     }
+    setDialog({
+      open: true,
+      type,
+      reconciliationIds: selectedReconciliationIds,
+    })
   }
+
+  const submit = async () => {
+    if (!dialog.open) return
+    const ids = dialog.reconciliationIds ?? (dialog.reconciliationId ? [dialog.reconciliationId] : [])
+    if (ids.length === 0) return
+
+    const body = { reviewer_notes: notes || null, decided_by: decidedBy || null }
+    const mut = dialog.type === "approve" ? approveMut : rejectMut
+
+    let succeeded = 0
+    let failed = 0
+    for (const reconciliationId of ids) {
+      try {
+        await mut.mutateAsync({ reconciliationId, body })
+        succeeded++
+      } catch {
+        failed++
+      }
+    }
+
+    if (succeeded > 0) {
+      toast.success(
+        ids.length === 1
+          ? `Exception ${dialog.type === "approve" ? "approved" : "rejected"}`
+          : `${succeeded} of ${ids.length} ${dialog.type === "approve" ? "approved" : "rejected"}`
+      )
+    }
+    if (failed > 0) {
+      toast.error(`${failed} action${failed === 1 ? "" : "s"} failed`)
+    }
+
+    setSelected(new Set())
+    closeDialog()
+  }
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleAll = () => {
+    if (allSelected) setSelected(new Set())
+    else setSelected(new Set(allSelectableIds))
+  }
+
+  const registerRecon = (invoiceId: string, reconciliationId: string) => {
+    setReconMap((prev) =>
+      prev[invoiceId] === reconciliationId
+        ? prev
+        : { ...prev, [invoiceId]: reconciliationId }
+    )
+  }
+
+  const dialogIds =
+    dialog.open
+      ? dialog.reconciliationIds ??
+        (dialog.reconciliationId ? [dialog.reconciliationId] : [])
+      : []
+  const dialogIsBulk = dialogIds.length > 1
 
   return (
     <div className="space-y-8">
       <PageHeader
         title="Exception Queue"
         description="Invoices that need a human decision. Each card shows the agent's recommendation."
+        actions={
+          invoices && invoices.length > 0 ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleAll}
+              className="gap-2"
+            >
+              <Checkbox checked={allSelected} onCheckedChange={() => toggleAll()} />
+              {allSelected ? "Deselect all" : "Select all"}
+            </Button>
+          ) : null
+        }
       />
+
+      {/* Bulk action toolbar */}
+      <AnimatePresence>
+        {selected.size > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -8, height: 0 }}
+            animate={{ opacity: 1, y: 0, height: "auto" }}
+            exit={{ opacity: 0, y: -8, height: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="flex items-center justify-between gap-3 px-5 py-3 rounded-xl border border-primary/30 bg-primary/5">
+              <div className="flex items-center gap-3">
+                <span className="size-7 rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-semibold tabular-nums">
+                  {selected.size}
+                </span>
+                <span className="text-sm font-medium">
+                  {selected.size} invoice{selected.size === 1 ? "" : "s"} selected
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelected(new Set())}
+                >
+                  <X className="size-4" />
+                  Clear
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => openBulk("reject")}
+                >
+                  <XCircle className="size-4" />
+                  Reject all
+                </Button>
+                <Button size="sm" onClick={() => openBulk("approve")}>
+                  <CheckCircle2 className="size-4" />
+                  Approve all
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {isLoading ? (
         <TableSkeleton rows={3} />
@@ -105,14 +256,10 @@ export function ExceptionsPage() {
               key={inv.id}
               invoice={inv}
               index={i}
-              onAction={(type, recId) =>
-                setDialog({
-                  open: true,
-                  type,
-                  invoiceId: inv.id,
-                  reconciliationId: recId,
-                })
-              }
+              checked={selected.has(inv.id)}
+              onToggle={() => toggleSelect(inv.id)}
+              onAction={openSingle}
+              onReconLoaded={(reconId) => registerRecon(inv.id, reconId)}
             />
           ))}
         </div>
@@ -123,11 +270,18 @@ export function ExceptionsPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {dialog.type === "approve" ? "Approve invoice" : "Reject invoice"}
+              {dialog.open && dialog.type === "approve"
+                ? dialogIsBulk
+                  ? `Approve ${dialogIds.length} invoices`
+                  : "Approve invoice"
+                : dialogIsBulk
+                  ? `Reject ${dialogIds.length} invoices`
+                  : "Reject invoice"}
             </DialogTitle>
             <DialogDescription>
-              Add an optional note explaining your decision. This will be stored
-              for audit and used by the RAG retriever for future similar cases.
+              {dialogIsBulk
+                ? "Your note and reviewer name will be applied to every selected invoice."
+                : "Add an optional note explaining your decision. This will be stored for audit and used by the RAG retriever for future similar cases."}
             </DialogDescription>
           </DialogHeader>
 
@@ -146,7 +300,7 @@ export function ExceptionsPage() {
               <Textarea
                 id="notes"
                 placeholder={
-                  dialog.type === "approve"
+                  dialog.open && dialog.type === "approve"
                     ? "e.g., Price increase was pre-approved by procurement"
                     : "e.g., Unauthorized vendor change"
                 }
@@ -163,15 +317,19 @@ export function ExceptionsPage() {
             </Button>
             <Button
               onClick={submit}
-              variant={dialog.type === "reject" ? "destructive" : "default"}
+              variant={
+                dialog.open && dialog.type === "reject" ? "destructive" : "default"
+              }
               disabled={approveMut.isPending || rejectMut.isPending}
             >
-              {dialog.type === "approve" ? (
+              {dialog.open && dialog.type === "approve" ? (
                 <CheckCircle2 className="size-4" />
               ) : (
                 <XCircle className="size-4" />
               )}
-              {dialog.type === "approve" ? "Approve" : "Reject"}
+              {dialog.open && dialog.type === "approve"
+                ? `Approve${dialogIsBulk ? ` ${dialogIds.length}` : ""}`
+                : `Reject${dialogIsBulk ? ` ${dialogIds.length}` : ""}`}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -180,16 +338,28 @@ export function ExceptionsPage() {
   )
 }
 
+interface ExceptionCardProps {
+  invoice: InvoiceListItem
+  index: number
+  checked: boolean
+  onToggle: () => void
+  onAction: (type: ActionType, reconciliationId: string) => void
+  onReconLoaded: (reconciliationId: string) => void
+}
+
 function ExceptionCard({
   invoice,
   index,
+  checked,
+  onToggle,
   onAction,
-}: {
-  invoice: InvoiceListItem
-  index: number
-  onAction: (type: "approve" | "reject", reconciliationId: string) => void
-}) {
+  onReconLoaded,
+}: ExceptionCardProps) {
   const { data: recon } = useReconciliationByInvoice(invoice.id)
+
+  useEffect(() => {
+    if (recon?.id) onReconLoaded(recon.id)
+  }, [recon?.id, onReconLoaded])
 
   return (
     <motion.div
@@ -197,11 +367,21 @@ function ExceptionCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05 }}
     >
-      <Card className="hover:shadow-elevated transition-all overflow-hidden">
+      <Card
+        className={cn(
+          "hover:shadow-elevated transition-all overflow-hidden",
+          checked && "ring-2 ring-primary/40 border-primary/40"
+        )}
+      >
         <CardContent className="p-5 space-y-4">
           {/* Header */}
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3 min-w-0">
+              <Checkbox
+                checked={checked}
+                onCheckedChange={onToggle}
+                className="mt-1.5"
+              />
               <div className="size-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
                 <AlertTriangle className="size-5 text-amber-500" />
               </div>

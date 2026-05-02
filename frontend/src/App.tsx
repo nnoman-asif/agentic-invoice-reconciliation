@@ -1,13 +1,19 @@
-import { Routes, Route } from "react-router-dom"
+import { useMemo } from "react"
+import { Routes, Route, useNavigate } from "react-router-dom"
 import { AnimatePresence } from "framer-motion"
 
 import { AppShell } from "@/components/layout/AppShell"
 import { CommandPalette } from "@/components/layout/CommandPalette"
+import {
+  ShortcutsOverlay,
+  useShortcutsOverlay,
+} from "@/components/layout/ShortcutsOverlay"
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary"
 import { PageLoadingBar } from "@/components/shared/PageLoadingBar"
 import { ROUTES } from "@/lib/routes"
 import { useTheme } from "@/hooks/useTheme"
 import { useInvoiceNotifications } from "@/hooks/useInvoiceNotifications"
+import { useShortcuts, type Shortcut } from "@/hooks/useShortcuts"
 
 import { LandingPage } from "@/pages/LandingPage"
 import { DashboardPage } from "@/pages/DashboardPage"
@@ -24,11 +30,13 @@ import { NotFoundPage } from "@/pages/NotFoundPage"
 export default function App() {
   useTheme() // initialize theme
   useInvoiceNotifications() // global cross-page notification dispatcher
+  useGlobalShortcuts()
 
   return (
     <ErrorBoundary>
       <PageLoadingBar />
       <CommandPalette />
+      <ShortcutsOverlay />
       <AnimatePresence mode="wait">
         <Routes>
           <Route path={ROUTES.landing} element={<LandingPage />} />
@@ -56,4 +64,78 @@ export default function App() {
       </AnimatePresence>
     </ErrorBoundary>
   )
+}
+
+/**
+ * Wires all global keyboard shortcuts:
+ *   ? -- open shortcuts overlay
+ *   g d -- dashboard, g i -- inbox, g e -- exceptions,
+ *   g p -- purchase orders, g l -- pipeline, g f -- 3D flow, g s -- settings
+ *   n -- new upload (jump to inbox)
+ */
+function useGlobalShortcuts() {
+  const navigate = useNavigate()
+  const toggleOverlay = useShortcutsOverlay((s) => s.toggle)
+
+  const shortcuts = useMemo<Shortcut[]>(
+    () => [
+      {
+        keys: "?",
+        description: "Show keyboard shortcuts",
+        category: "Help",
+        handler: () => toggleOverlay(),
+      },
+      {
+        keys: "g d",
+        description: "Go to Dashboard",
+        category: "Navigation",
+        handler: () => navigate(ROUTES.dashboard),
+      },
+      {
+        keys: "g i",
+        description: "Go to Inbox",
+        category: "Navigation",
+        handler: () => navigate(ROUTES.inbox),
+      },
+      {
+        keys: "g e",
+        description: "Go to Exceptions",
+        category: "Navigation",
+        handler: () => navigate(ROUTES.exceptions),
+      },
+      {
+        keys: "g p",
+        description: "Go to Purchase Orders",
+        category: "Navigation",
+        handler: () => navigate(ROUTES.purchaseOrders),
+      },
+      {
+        keys: "g l",
+        description: "Go to Pipeline",
+        category: "Navigation",
+        handler: () => navigate(ROUTES.pipeline),
+      },
+      {
+        keys: "g f",
+        description: "Go to 3D Flow",
+        category: "Navigation",
+        handler: () => navigate(ROUTES.flow),
+      },
+      {
+        keys: "g s",
+        description: "Go to Settings",
+        category: "Navigation",
+        handler: () => navigate(ROUTES.settings),
+      },
+      {
+        keys: "n",
+        description: "New invoice (upload)",
+        category: "Actions",
+        handler: () => navigate(ROUTES.inbox),
+      },
+    ],
+    [navigate, toggleOverlay]
+  )
+
+  useShortcuts(shortcuts)
 }

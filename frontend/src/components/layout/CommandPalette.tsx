@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import {
   LayoutDashboard,
@@ -24,6 +24,7 @@ import {
   CommandSeparator,
   CommandShortcut,
 } from "@/components/ui/command"
+import { HighlightedText } from "@/components/shared/HighlightedText"
 import { useUIStore } from "@/store/ui"
 import { useTheme } from "@/hooks/useTheme"
 import { ROUTES } from "@/lib/routes"
@@ -36,6 +37,7 @@ export function CommandPalette() {
   const navigate = useNavigate()
   const { setTheme } = useTheme()
   const { data: invoices } = useInvoices()
+  const [search, setSearch] = useState("")
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -48,6 +50,11 @@ export function CommandPalette() {
     return () => document.removeEventListener("keydown", down)
   }, [open, setOpen])
 
+  // Reset search when closing
+  useEffect(() => {
+    if (!open) setSearch("")
+  }, [open])
+
   const go = (path: string) => {
     navigate(path)
     setOpen(false)
@@ -55,39 +62,43 @@ export function CommandPalette() {
 
   return (
     <CommandDialog open={open} onOpenChange={setOpen}>
-      <CommandInput placeholder="Type a command or search…" />
+      <CommandInput
+        placeholder="Type a command or search…"
+        value={search}
+        onValueChange={setSearch}
+      />
       <CommandList>
         <CommandEmpty>No results found.</CommandEmpty>
 
         <CommandGroup heading="Navigation">
           <CommandItem onSelect={() => go(ROUTES.dashboard)}>
             <LayoutDashboard />
-            Dashboard
+            <HighlightedText text="Dashboard" query={search} />
           </CommandItem>
           <CommandItem onSelect={() => go(ROUTES.inbox)}>
             <Inbox />
-            Invoice Inbox
+            <HighlightedText text="Invoice Inbox" query={search} />
           </CommandItem>
           <CommandItem onSelect={() => go(ROUTES.exceptions)}>
             <AlertTriangle />
-            Exceptions
+            <HighlightedText text="Exceptions" query={search} />
           </CommandItem>
           <CommandItem onSelect={() => go(ROUTES.purchaseOrders)}>
             <ShoppingCart />
-            Purchase Orders
+            <HighlightedText text="Purchase Orders" query={search} />
           </CommandItem>
           <CommandItem onSelect={() => go(ROUTES.pipeline)}>
             <Workflow />
-            Pipeline
+            <HighlightedText text="Pipeline" query={search} />
             <CommandShortcut>Live</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={() => go(ROUTES.flow)}>
             <Sparkles />
-            3D Flow
+            <HighlightedText text="3D Flow" query={search} />
           </CommandItem>
           <CommandItem onSelect={() => go(ROUTES.settings)}>
             <Settings />
-            Settings
+            <HighlightedText text="Settings" query={search} />
           </CommandItem>
         </CommandGroup>
 
@@ -95,18 +106,22 @@ export function CommandPalette() {
           <>
             <CommandSeparator />
             <CommandGroup heading="Recent Invoices">
-              {invoices.slice(0, 5).map((inv) => (
-                <CommandItem
-                  key={inv.id}
-                  onSelect={() => go(`/invoices/${inv.id}`)}
-                >
-                  <FileSearch />
-                  <span className="flex-1">
-                    {inv.invoice_number ?? `Invoice ${shortId(inv.id)}`}
-                  </span>
-                  <CommandShortcut>{inv.processing_status}</CommandShortcut>
-                </CommandItem>
-              ))}
+              {invoices.slice(0, 5).map((inv) => {
+                const label =
+                  inv.invoice_number ?? `Invoice ${shortId(inv.id)}`
+                return (
+                  <CommandItem
+                    key={inv.id}
+                    onSelect={() => go(`/invoices/${inv.id}`)}
+                  >
+                    <FileSearch />
+                    <span className="flex-1">
+                      <HighlightedText text={label} query={search} />
+                    </span>
+                    <CommandShortcut>{inv.processing_status}</CommandShortcut>
+                  </CommandItem>
+                )
+              })}
             </CommandGroup>
           </>
         )}
@@ -120,7 +135,7 @@ export function CommandPalette() {
             }}
           >
             <Sun />
-            Switch to Light
+            <HighlightedText text="Switch to Light" query={search} />
           </CommandItem>
           <CommandItem
             onSelect={() => {
@@ -129,7 +144,7 @@ export function CommandPalette() {
             }}
           >
             <Moon />
-            Switch to Dark
+            <HighlightedText text="Switch to Dark" query={search} />
           </CommandItem>
           <CommandItem
             onSelect={() => {
@@ -138,7 +153,7 @@ export function CommandPalette() {
             }}
           >
             <Monitor />
-            Use System theme
+            <HighlightedText text="Use System theme" query={search} />
           </CommandItem>
         </CommandGroup>
       </CommandList>
