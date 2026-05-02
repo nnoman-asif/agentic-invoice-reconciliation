@@ -10,6 +10,7 @@ import {
 } from "@/components/layout/ShortcutsOverlay"
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary"
 import { PageLoadingBar } from "@/components/shared/PageLoadingBar"
+import { VendorSheet } from "@/components/shared/VendorSheet"
 import { ROUTES } from "@/lib/routes"
 import { useTheme } from "@/hooks/useTheme"
 import { useInvoiceNotifications } from "@/hooks/useInvoiceNotifications"
@@ -37,6 +38,7 @@ export default function App() {
       <PageLoadingBar />
       <CommandPalette />
       <ShortcutsOverlay />
+      <VendorSheet />
       <AnimatePresence mode="wait">
         <Routes>
           <Route path={ROUTES.landing} element={<LandingPage />} />

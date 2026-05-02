@@ -1,9 +1,9 @@
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Code2 } from "lucide-react"
 
 import { AgentNode } from "./AgentNode"
 import { AnimatedEdge } from "./AnimatedEdge"
+import { AgentInternals } from "./AgentInternals"
 import { useLivePipeline, type AgentStage } from "@/hooks/useLivePipeline"
 import { Card, CardContent } from "@/components/ui/card"
 
@@ -74,10 +74,16 @@ export function PipelineVisualizer({ invoiceId }: Props) {
               value={`${stages.filter((s) => s.status === "completed").length} / ${stages.length}`}
             />
           </div>
+
+          {!selectedStage && (
+            <div className="mt-4 text-center text-xs text-muted-foreground">
+              Click any agent above to inspect its prompt, input, and output
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Selected stage detail */}
+      {/* Selected stage internals */}
       <AnimatePresence mode="wait">
         {selectedStage && (
           <motion.div
@@ -87,37 +93,7 @@ export function PipelineVisualizer({ invoiceId }: Props) {
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.2 }}
           >
-            <Card>
-              <CardContent className="p-6 space-y-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-semibold">
-                      {selectedStage.label} Agent
-                    </h3>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground capitalize">
-                      {selectedStage.status}
-                    </span>
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {selectedStage.description}
-                  </p>
-                </div>
-
-                {selectedStage.output && (
-                  <div className="rounded-lg bg-muted/40 border border-border/60 overflow-hidden">
-                    <div className="flex items-center gap-2 px-4 py-2 border-b border-border/60 bg-muted/40">
-                      <Code2 className="size-3.5 text-muted-foreground" />
-                      <span className="text-xs font-medium text-muted-foreground">
-                        Output
-                      </span>
-                    </div>
-                    <pre className="p-4 text-xs font-mono overflow-x-auto leading-relaxed">
-                      {JSON.stringify(selectedStage.output, null, 2)}
-                    </pre>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <AgentInternals stage={selectedStage} />
           </motion.div>
         )}
       </AnimatePresence>

@@ -8,10 +8,12 @@ import { ActivityFeed } from "@/components/dashboard/ActivityFeed"
 import { LiveActivityPulse } from "@/components/dashboard/LiveActivityPulse"
 import { ProcessingTimeCard } from "@/components/dashboard/ProcessingTimeChart"
 import { useDashboardStats } from "@/api/dashboard"
+import { useDailyTrends } from "@/hooks/useDailyTrends"
 import { PageSkeleton } from "@/components/shared/LoadingSkeleton"
 
 export function DashboardPage() {
   const { data: stats, isLoading } = useDashboardStats()
+  const trends = useDailyTrends()
 
   if (isLoading || !stats) {
     return <PageSkeleton />
@@ -41,6 +43,7 @@ export function DashboardPage() {
           value={stats.total_invoices}
           icon={FileText}
           accent="blue"
+          sparkline={trends.total}
           index={0}
         />
         <StatCard
@@ -48,6 +51,7 @@ export function DashboardPage() {
           value={approved}
           icon={CheckCircle2}
           accent="emerald"
+          sparkline={trends.approved}
           index={1}
         />
         <StatCard
@@ -55,6 +59,7 @@ export function DashboardPage() {
           value={pendingReview}
           icon={AlertTriangle}
           accent="amber"
+          sparkline={trends.pendingReview}
           index={2}
         />
         <StatCard
@@ -62,6 +67,7 @@ export function DashboardPage() {
           value={completed}
           icon={Activity}
           accent="purple"
+          sparkline={trends.completed}
           index={3}
         />
       </div>

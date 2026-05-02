@@ -14,6 +14,7 @@ from app.api.routes import (
     health,
     invoices,
     purchase_orders,
+    vendors,
 )
 from app.api.webhooks import invoice_webhook
 
@@ -59,4 +60,5 @@ app.include_router(purchase_orders.router, prefix="/api", tags=["Purchase Orders
 app.include_router(delivery_receipts.router, prefix="/api", tags=["Delivery Receipts"])
 app.include_router(exceptions.router, prefix="/api", tags=["Exceptions"])
 app.include_router(dashboard.router, prefix="/api", tags=["Dashboard"])
+app.include_router(vendors.router, prefix="/api", tags=["Vendors"])
 app.include_router(invoice_webhook.router, prefix="/api", tags=["Webhooks"])

@@ -4,12 +4,13 @@ import { Search, ShoppingCart } from "lucide-react"
 
 import { PageHeader } from "@/components/shared/PageHeader"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { TableSkeleton } from "@/components/shared/LoadingSkeleton"
 import { EmptyState } from "@/components/shared/EmptyState"
+import { VendorBadge } from "@/components/shared/VendorBadge"
 import { usePurchaseOrders } from "@/api/purchase-orders"
-import { formatCurrency, formatDate, shortId } from "@/lib/format"
+import { formatCurrency, formatDate } from "@/lib/format"
 
 export function PurchaseOrdersPage() {
   const [search, setSearch] = useState("")
@@ -80,8 +81,8 @@ export function PurchaseOrdersPage() {
                       <span className="font-mono font-medium">{po.po_number}</span>
                     </div>
                   </td>
-                  <td className="px-5 py-3.5 text-muted-foreground font-mono text-xs">
-                    {shortId(po.vendor_id)}
+                  <td className="px-5 py-3.5">
+                    <VendorBadge vendorId={po.vendor_id} />
                   </td>
                   <td className="px-5 py-3.5 text-muted-foreground">
                     {formatDate(po.issue_date)}

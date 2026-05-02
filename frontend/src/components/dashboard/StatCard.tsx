@@ -1,8 +1,11 @@
 import { motion } from "framer-motion"
 import { Card } from "@/components/ui/card"
 import { AnimatedNumber } from "@/components/shared/AnimatedNumber"
+import { Sparkline } from "@/components/dashboard/Sparkline"
 import { cn } from "@/lib/utils"
 import { TrendingDown, TrendingUp } from "lucide-react"
+
+type Accent = "blue" | "emerald" | "amber" | "purple"
 
 interface StatCardProps {
   label: string
@@ -13,15 +16,24 @@ interface StatCardProps {
     value: number
     label: string
   }
-  accent?: "blue" | "emerald" | "amber" | "purple"
+  /** 7+ data points rendered as a sparkline at the bottom of the card */
+  sparkline?: number[]
+  accent?: Accent
   index?: number
 }
 
-const ACCENT: Record<NonNullable<StatCardProps["accent"]>, string> = {
+const ACCENT: Record<Accent, string> = {
   blue: "from-blue-500/15 to-blue-500/0 text-blue-500",
   emerald: "from-emerald-500/15 to-emerald-500/0 text-emerald-500",
   amber: "from-amber-500/15 to-amber-500/0 text-amber-500",
   purple: "from-purple-500/15 to-purple-500/0 text-purple-500",
+}
+
+const SPARK_COLOR: Record<Accent, string> = {
+  blue: "rgb(59 130 246)",
+  emerald: "rgb(16 185 129)",
+  amber: "rgb(245 158 11)",
+  purple: "rgb(168 85 247)",
 }
 
 export function StatCard({
@@ -30,6 +42,7 @@ export function StatCard({
   format,
   icon: Icon,
   trend,
+  sparkline,
   accent = "blue",
   index = 0,
 }: StatCardProps) {
@@ -87,6 +100,21 @@ export function StatCard({
               {trend.value}%
             </span>
             <span className="text-muted-foreground">{trend.label}</span>
+          </div>
+        )}
+
+        {sparkline && sparkline.length > 1 && (
+          <div className="relative mt-4 -mx-1">
+            <Sparkline
+              data={sparkline}
+              color={SPARK_COLOR[accent]}
+              width={240}
+              height={36}
+              className="w-full"
+            />
+            <div className="text-[10px] text-muted-foreground/80 mt-1">
+              Last 7 days
+            </div>
           </div>
         )}
       </Card>

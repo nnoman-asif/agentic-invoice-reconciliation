@@ -10,6 +10,7 @@ import {
   Sparkles,
   GitCompare,
   CheckCircle2,
+  Clock,
   XCircle,
 } from "lucide-react"
 
@@ -21,8 +22,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ProcessingStatusBadge } from "@/components/invoice/ProcessingStatusBadge"
 import { BusinessStatusBadge } from "@/components/invoice/BusinessStatusBadge"
 import { LineItemMatchRow } from "@/components/invoice/LineItemMatchRow"
+import { ActivityTimeline } from "@/components/invoice/ActivityTimeline"
 import { ConfidenceBar } from "@/components/shared/ConfidenceBar"
 import { EmptyState } from "@/components/shared/EmptyState"
+import { VendorBadge } from "@/components/shared/VendorBadge"
 import { useInvoice, useInvoiceReconciliation } from "@/api/invoices"
 import { celebrateFromElement } from "@/lib/confetti"
 import {
@@ -90,6 +93,9 @@ export function InvoiceDetailPage() {
                 </code>
               </div>
               <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                {invoice.vendor_id && (
+                  <VendorBadge vendorId={invoice.vendor_id} />
+                )}
                 {invoice.po_reference && (
                   <span className="flex items-center gap-1.5">
                     <Building2 className="size-3.5" />
@@ -197,6 +203,19 @@ export function InvoiceDetailPage() {
                   highlight={recon.discrepancies.length > 0}
                 />
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Activity timeline */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="size-4 text-muted-foreground" />
+                Timeline
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ActivityTimeline invoice={invoice} reconciliation={recon} />
             </CardContent>
           </Card>
 
