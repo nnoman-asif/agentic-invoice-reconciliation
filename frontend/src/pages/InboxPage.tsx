@@ -5,10 +5,23 @@ import { InvoiceUploadZone } from "@/components/invoice/InvoiceUploadZone"
 import { InvoiceTable } from "@/components/invoice/InvoiceTable"
 import { EmptyState } from "@/components/shared/EmptyState"
 import { EmptyInbox } from "@/components/shared/illustrations/EmptyInbox"
+import { ExportButton } from "@/components/shared/ExportButton"
 import { TableSkeleton } from "@/components/shared/LoadingSkeleton"
 import { useInvoices } from "@/api/invoices"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import type { CsvColumn } from "@/lib/csv"
+import type { InvoiceListItem } from "@/api/types"
+
+const INVOICE_COLUMNS: CsvColumn<InvoiceListItem>[] = [
+  { header: "ID", accessor: (i) => i.id },
+  { header: "Invoice Number", accessor: (i) => i.invoice_number ?? "" },
+  { header: "Vendor ID", accessor: (i) => i.vendor_id ?? "" },
+  { header: "Total Amount", accessor: (i) => i.total_amount ?? "" },
+  { header: "Processing Status", accessor: (i) => i.processing_status },
+  { header: "Business Status", accessor: (i) => i.business_status },
+  { header: "Created At", accessor: (i) => i.created_at },
+]
 
 const FILTERS = [
   { value: "", label: "All" },
@@ -30,6 +43,13 @@ export function InboxPage() {
       <PageHeader
         title="Invoice Inbox"
         description="Drop invoices in to start automated reconciliation. Watch as agents process each one in real time."
+        actions={
+          <ExportButton
+            data={invoices}
+            columns={INVOICE_COLUMNS}
+            filenamePrefix="invoices"
+          />
+        }
       />
 
       <InvoiceUploadZone />

@@ -1,6 +1,6 @@
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import { motion } from "framer-motion"
-import { ArrowRight, Sparkles } from "lucide-react"
+import { ArrowRight, Loader2, Play, Sparkles } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -11,6 +11,7 @@ import {
   FeatureMiniDiagram,
   type FeatureVariant,
 } from "@/components/landing/FeatureMiniDiagram"
+import { useDemoMode } from "@/hooks/useDemoMode"
 import { ROUTES } from "@/lib/routes"
 
 interface Feature {
@@ -53,6 +54,14 @@ const FEATURES: Feature[] = [
 ]
 
 export function LandingPage() {
+  const navigate = useNavigate()
+  const { runDemo, isRunning } = useDemoMode()
+
+  const handleDemo = async () => {
+    await runDemo()
+    navigate(ROUTES.inbox)
+  }
+
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">
       {/* Background mesh */}
@@ -106,7 +115,7 @@ export function LandingPage() {
             and delivery receipts, detects anomalies, and routes exceptions to
             humans. Built with LangGraph, FastAPI, and local LLMs.
           </p>
-          <div className="mt-10 flex items-center justify-center gap-3">
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
             <MagneticButton>
               <Button size="lg" asChild>
                 <Link to={ROUTES.dashboard}>
@@ -116,7 +125,22 @@ export function LandingPage() {
               </Button>
             </MagneticButton>
             <MagneticButton>
-              <Button size="lg" variant="outline" asChild>
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={handleDemo}
+                disabled={isRunning}
+              >
+                {isRunning ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Play className="size-4" />
+                )}
+                {isRunning ? "Starting demo…" : "Try a live demo"}
+              </Button>
+            </MagneticButton>
+            <MagneticButton>
+              <Button size="lg" variant="ghost" asChild>
                 <Link to={ROUTES.flow}>See 3D flow</Link>
               </Button>
             </MagneticButton>

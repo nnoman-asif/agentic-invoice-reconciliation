@@ -28,7 +28,9 @@ import {
 } from "@/components/ui/dialog"
 import { EmptyState } from "@/components/shared/EmptyState"
 import { AllClear } from "@/components/shared/illustrations/AllClear"
+import { ExportButton } from "@/components/shared/ExportButton"
 import { TableSkeleton } from "@/components/shared/LoadingSkeleton"
+import type { CsvColumn } from "@/lib/csv"
 import {
   useApproveException,
   useExceptions,
@@ -40,6 +42,15 @@ import type { InvoiceListItem } from "@/api/types"
 import { cn } from "@/lib/utils"
 
 type ActionType = "approve" | "reject"
+
+const EXCEPTION_COLUMNS: CsvColumn<InvoiceListItem>[] = [
+  { header: "Invoice ID", accessor: (i) => i.id },
+  { header: "Invoice Number", accessor: (i) => i.invoice_number ?? "" },
+  { header: "Vendor ID", accessor: (i) => i.vendor_id ?? "" },
+  { header: "Total Amount", accessor: (i) => i.total_amount ?? "" },
+  { header: "Business Status", accessor: (i) => i.business_status },
+  { header: "Created At", accessor: (i) => i.created_at },
+]
 
 type DialogState =
   | { open: false }
@@ -181,15 +192,25 @@ export function ExceptionsPage() {
         description="Invoices that need a human decision. Each card shows the agent's recommendation."
         actions={
           invoices && invoices.length > 0 ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={toggleAll}
-              className="gap-2"
-            >
-              <Checkbox checked={allSelected} onCheckedChange={() => toggleAll()} />
-              {allSelected ? "Deselect all" : "Select all"}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={toggleAll}
+                className="gap-2"
+              >
+                <Checkbox
+                  checked={allSelected}
+                  onCheckedChange={() => toggleAll()}
+                />
+                {allSelected ? "Deselect all" : "Select all"}
+              </Button>
+              <ExportButton
+                data={invoices}
+                columns={EXCEPTION_COLUMNS}
+                filenamePrefix="exceptions"
+              />
+            </div>
           ) : null
         }
       />

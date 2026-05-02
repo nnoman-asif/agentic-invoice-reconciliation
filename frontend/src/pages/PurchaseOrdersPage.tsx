@@ -10,8 +10,22 @@ import { TableSkeleton } from "@/components/shared/LoadingSkeleton"
 import { EmptyState } from "@/components/shared/EmptyState"
 import { NoData } from "@/components/shared/illustrations/NoData"
 import { VendorBadge } from "@/components/shared/VendorBadge"
+import { ExportButton } from "@/components/shared/ExportButton"
 import { usePurchaseOrders } from "@/api/purchase-orders"
 import { formatCurrency, formatDate } from "@/lib/format"
+import type { CsvColumn } from "@/lib/csv"
+import type { PurchaseOrderListItem } from "@/api/types"
+
+const PO_COLUMNS: CsvColumn<PurchaseOrderListItem>[] = [
+  { header: "ID", accessor: (p) => p.id },
+  { header: "PO Number", accessor: (p) => p.po_number },
+  { header: "Vendor ID", accessor: (p) => p.vendor_id },
+  { header: "Issue Date", accessor: (p) => p.issue_date },
+  { header: "Total Amount", accessor: (p) => p.total_amount },
+  { header: "Currency", accessor: (p) => p.currency },
+  { header: "Status", accessor: (p) => p.status },
+  { header: "Created At", accessor: (p) => p.created_at },
+]
 
 export function PurchaseOrdersPage() {
   const [search, setSearch] = useState("")
@@ -32,6 +46,13 @@ export function PurchaseOrdersPage() {
       <PageHeader
         title="Purchase Orders"
         description="All purchase orders that the matcher agent uses for invoice reconciliation."
+        actions={
+          <ExportButton
+            data={data}
+            columns={PO_COLUMNS}
+            filenamePrefix="purchase-orders"
+          />
+        }
       />
 
       <div className="relative max-w-md">
