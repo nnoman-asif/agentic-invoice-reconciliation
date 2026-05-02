@@ -4,8 +4,14 @@ import type { InvoiceListItem } from "@/api/types"
 
 const DAYS = 7
 
+// Build a YYYY-MM-DD key from a Date in *local* timezone so an invoice
+// uploaded "today" buckets under today regardless of the user's TZ.
+// (Using `toISOString()` here would convert to UTC and shift the bucket.)
 function dayKey(date: Date): string {
-  return date.toISOString().slice(0, 10)
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, "0")
+  const d = String(date.getDate()).padStart(2, "0")
+  return `${y}-${m}-${d}`
 }
 
 function lastNDays(n: number): string[] {

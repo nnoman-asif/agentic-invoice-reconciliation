@@ -64,6 +64,10 @@ async def approve_exception(
     invoice.updated_at = datetime.now(timezone.utc)
 
     await db.flush()
+    # Refresh so `decided_at` (server-populated TIMESTAMPTZ) comes back
+    # as a TZ-aware datetime rather than the Python-side naive default,
+    # ensuring the POST response matches what GET returns later.
+    await db.refresh(review)
     return review
 
 
@@ -99,4 +103,5 @@ async def reject_exception(
     invoice.updated_at = datetime.now(timezone.utc)
 
     await db.flush()
+    await db.refresh(review)
     return review

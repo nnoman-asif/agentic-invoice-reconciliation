@@ -1,5 +1,5 @@
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
@@ -18,6 +18,16 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
+def _utc_now() -> datetime:
+    """Return current UTC time as a timezone-aware datetime.
+
+    Using a TZ-aware value (vs. the naive `datetime.utcnow`) so asyncpg
+    sends the correct instant to PostgreSQL's TIMESTAMPTZ columns,
+    independent of the host machine's local timezone.
+    """
+    return datetime.now(timezone.utc)
+
+
 class Base(DeclarativeBase):
     pass
 
@@ -31,8 +41,8 @@ class Vendor(Base):
     tax_id: Mapped[str | None] = mapped_column(String(50), unique=True)
     address: Mapped[str | None] = mapped_column(Text)
     contact_email: Mapped[str | None] = mapped_column(String(255))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now, onupdate=_utc_now)
 
     purchase_orders: Mapped[list["PurchaseOrder"]] = relationship(back_populates="vendor")
     invoices: Mapped[list["Invoice"]] = relationship(back_populates="vendor")
@@ -50,8 +60,8 @@ class PurchaseOrder(Base):
     total_amount: Mapped[float] = mapped_column(DECIMAL(15, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
     notes: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now, onupdate=_utc_now)
 
     vendor: Mapped["Vendor"] = relationship(back_populates="purchase_orders")
     line_items: Mapped[list["POLineItem"]] = relationship(back_populates="purchase_order", cascade="all, delete-orphan")
@@ -95,7 +105,7 @@ class DeliveryReceipt(Base):
     receiver_name: Mapped[str | None] = mapped_column(String(255))
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="received")
     notes: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
 
     purchase_order: Mapped["PurchaseOrder"] = relationship(back_populates="delivery_receipts")
     line_items: Mapped[list["DeliveryLineItem"]] = relationship(back_populates="delivery_receipt", cascade="all, delete-orphan")
@@ -143,8 +153,8 @@ class Invoice(Base):
     file_content_type: Mapped[str | None] = mapped_column(String(50))
     parsed_data: Mapped[dict | None] = mapped_column(JSONB)
     error_message: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now, onupdate=_utc_now)
 
     vendor: Mapped["Vendor | None"] = relationship(back_populates="invoices")
     line_items: Mapped[list["InvoiceLineItem"]] = relationship(back_populates="invoice", cascade="all, delete-orphan")
@@ -192,8 +202,8 @@ class Reconciliation(Base):
     recommendation_reasoning: Mapped[str | None] = mapped_column(Text)
     trace_id: Mapped[str | None] = mapped_column(String(100))
     processing_time_ms: Mapped[int | None] = mapped_column(Integer)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now, onupdate=_utc_now)
 
     invoice: Mapped["Invoice"] = relationship(back_populates="reconciliations")
     purchase_order: Mapped["PurchaseOrder | None"] = relationship(back_populates="reconciliations")
@@ -249,7 +259,7 @@ class Discrepancy(Base):
     expected_value: Mapped[str | None] = mapped_column(String(100))
     actual_value: Mapped[str | None] = mapped_column(String(100))
     deviation_pct: Mapped[float | None] = mapped_column(Float)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
 
     reconciliation: Mapped["Reconciliation"] = relationship(back_populates="discrepancies")
 
@@ -268,7 +278,7 @@ class HumanReview(Base):
     decision: Mapped[str] = mapped_column(String(20), nullable=False)
     reviewer_notes: Mapped[str | None] = mapped_column(Text)
     decided_by: Mapped[str | None] = mapped_column(String(255))
-    decided_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    decided_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
 
     reconciliation: Mapped["Reconciliation"] = relationship(back_populates="human_reviews")
 
@@ -284,7 +294,7 @@ class ReconciliationEmbedding(Base):
     reconciliation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("reconciliations.id", ondelete="CASCADE"), nullable=False)
     embedding = mapped_column(Vector(1024), nullable=False)
     content_summary: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
 
     reconciliation: Mapped["Reconciliation"] = relationship(back_populates="embeddings")
 

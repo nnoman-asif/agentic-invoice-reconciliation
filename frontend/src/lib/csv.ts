@@ -56,7 +56,12 @@ export function downloadCsv<T>(
 }
 
 export function timestampedFilename(prefix: string): string {
+  // Local-time stamp so the filename matches the user's wall clock,
+  // not UTC. Format: prefix-YYYY-MM-DD-HH-MM-SS.csv
   const now = new Date()
-  const stamp = now.toISOString().slice(0, 19).replace(/[:T]/g, "-")
+  const pad = (n: number) => String(n).padStart(2, "0")
+  const stamp =
+    `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}` +
+    `-${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`
   return `${prefix}-${stamp}.csv`
 }

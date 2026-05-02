@@ -1,5 +1,19 @@
 import { format, formatDistanceToNow, parseISO } from "date-fns"
 
+// Matches YYYY-MM-DD (no time component). API date-only fields like
+// invoice_date / issue_date come in this shape and must be parsed in
+// the local timezone, otherwise users west of UTC see the previous day.
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/
+
+function parseInput(input: string | Date): Date {
+  if (input instanceof Date) return input
+  if (DATE_ONLY_RE.test(input)) {
+    const [y, m, d] = input.split("-").map(Number)
+    return new Date(y, m - 1, d)
+  }
+  return parseISO(input)
+}
+
 export function formatCurrency(amount: number | null | undefined, currency = "USD"): string {
   if (amount === null || amount === undefined) return "—"
   return new Intl.NumberFormat("en-US", {
@@ -25,8 +39,7 @@ export function formatPercent(value: number | null | undefined, decimals = 1): s
 
 export function formatDate(input: string | Date | null | undefined, fmt = "MMM d, yyyy"): string {
   if (!input) return "—"
-  const date = typeof input === "string" ? parseISO(input) : input
-  return format(date, fmt)
+  return format(parseInput(input), fmt)
 }
 
 export function formatDateTime(input: string | Date | null | undefined): string {
@@ -35,8 +48,7 @@ export function formatDateTime(input: string | Date | null | undefined): string 
 
 export function formatRelative(input: string | Date | null | undefined): string {
   if (!input) return "—"
-  const date = typeof input === "string" ? parseISO(input) : input
-  return formatDistanceToNow(date, { addSuffix: true })
+  return formatDistanceToNow(parseInput(input), { addSuffix: true })
 }
 
 export function formatDuration(ms: number | null | undefined): string {
