@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react"
 import { useParams, Link } from "react-router-dom"
 import { motion } from "framer-motion"
 import {
@@ -23,6 +24,7 @@ import { LineItemMatchRow } from "@/components/invoice/LineItemMatchRow"
 import { ConfidenceBar } from "@/components/shared/ConfidenceBar"
 import { EmptyState } from "@/components/shared/EmptyState"
 import { useInvoice, useInvoiceReconciliation } from "@/api/invoices"
+import { celebrateFromElement } from "@/lib/confetti"
 import {
   formatCurrency,
   formatDate,
@@ -36,6 +38,21 @@ export function InvoiceDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { data: invoice, isLoading } = useInvoice(id)
   const { data: recon } = useInvoiceReconciliation(id)
+
+  // Trigger confetti once when an auto-approved reconciliation appears
+  const celebratedRef = useRef<string | null>(null)
+  const successBadgeRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!recon || !id) return
+    if (recon.overall_status !== "auto_approved") return
+    if (celebratedRef.current === id) return
+    celebratedRef.current = id
+    // small delay so the badge is mounted and visible
+    const t = window.setTimeout(() => {
+      celebrateFromElement(successBadgeRef.current)
+    }, 250)
+    return () => window.clearTimeout(t)
+  }, [recon, id])
 
   if (isLoading || !invoice) {
     return <PageSkeleton />
@@ -140,25 +157,26 @@ export function InvoiceDetailPage() {
                   {recon.agent_recommendation ?? "—"}
                 </div>
               </div>
-              <Badge
-                variant={
-                  recon.overall_status === "auto_approved" || recon.overall_status === "approved"
-                    ? "success"
-                    : recon.overall_status === "rejected"
-                      ? "destructive"
-                      : "warning"
-                }
-                className="shrink-0"
-              >
-                {recon.overall_status === "auto_approved" && (
-                  <CheckCircle2 className="size-3" />
-                )}
-                {recon.overall_status === "rejected" && <XCircle className="size-3" />}
-                {recon.overall_status === "pending_review" && (
-                  <AlertTriangle className="size-3" />
-                )}
-                {recon.overall_status.replace("_", " ")}
-              </Badge>
+              <div ref={successBadgeRef} className="shrink-0">
+                <Badge
+                  variant={
+                    recon.overall_status === "auto_approved" || recon.overall_status === "approved"
+                      ? "success"
+                      : recon.overall_status === "rejected"
+                        ? "destructive"
+                        : "warning"
+                  }
+                >
+                  {recon.overall_status === "auto_approved" && (
+                    <CheckCircle2 className="size-3" />
+                  )}
+                  {recon.overall_status === "rejected" && <XCircle className="size-3" />}
+                  {recon.overall_status === "pending_review" && (
+                    <AlertTriangle className="size-3" />
+                  )}
+                  {recon.overall_status.replace("_", " ")}
+                </Badge>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               {recon.recommendation_reasoning && (

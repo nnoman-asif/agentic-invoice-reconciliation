@@ -5,6 +5,7 @@ import { StatCard } from "@/components/dashboard/StatCard"
 import { MatchRateChart } from "@/components/dashboard/MatchRateChart"
 import { TopDiscrepanciesChart } from "@/components/dashboard/TopDiscrepanciesChart"
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed"
+import { LiveActivityPulse } from "@/components/dashboard/LiveActivityPulse"
 import { ProcessingTimeCard } from "@/components/dashboard/ProcessingTimeChart"
 import { useDashboardStats } from "@/api/dashboard"
 import { PageSkeleton } from "@/components/shared/LoadingSkeleton"
@@ -30,6 +31,8 @@ export function DashboardPage() {
         title="Dashboard"
         description="Real-time overview of your invoice reconciliation pipeline."
       />
+
+      <LiveActivityPulse />
 
       {/* Stats grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

@@ -7,6 +7,7 @@ import { ErrorBoundary } from "@/components/shared/ErrorBoundary"
 import { PageLoadingBar } from "@/components/shared/PageLoadingBar"
 import { ROUTES } from "@/lib/routes"
 import { useTheme } from "@/hooks/useTheme"
+import { useInvoiceNotifications } from "@/hooks/useInvoiceNotifications"
 
 import { LandingPage } from "@/pages/LandingPage"
 import { DashboardPage } from "@/pages/DashboardPage"
@@ -22,6 +23,7 @@ import { NotFoundPage } from "@/pages/NotFoundPage"
 
 export default function App() {
   useTheme() // initialize theme
+  useInvoiceNotifications() // global cross-page notification dispatcher
 
   return (
     <ErrorBoundary>

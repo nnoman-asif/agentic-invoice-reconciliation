@@ -13,6 +13,7 @@ import {
 
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { MagneticButton } from "@/components/shared/MagneticButton"
 import { ROUTES } from "@/lib/routes"
 
 const FEATURES = [
@@ -103,15 +104,19 @@ export function LandingPage() {
             humans. Built with LangGraph, FastAPI, and local LLMs.
           </p>
           <div className="mt-10 flex items-center justify-center gap-3">
-            <Button size="lg" asChild>
-              <Link to={ROUTES.dashboard}>
-                Launch dashboard
-                <ArrowRight className="size-4" />
-              </Link>
-            </Button>
-            <Button size="lg" variant="outline" asChild>
-              <Link to={ROUTES.flow}>See 3D flow</Link>
-            </Button>
+            <MagneticButton>
+              <Button size="lg" asChild>
+                <Link to={ROUTES.dashboard}>
+                  Launch dashboard
+                  <ArrowRight className="size-4" />
+                </Link>
+              </Button>
+            </MagneticButton>
+            <MagneticButton>
+              <Button size="lg" variant="outline" asChild>
+                <Link to={ROUTES.flow}>See 3D flow</Link>
+              </Button>
+            </MagneticButton>
           </div>
         </motion.div>
 
@@ -207,12 +212,14 @@ export function LandingPage() {
             <p className="mt-3 text-muted-foreground">
               Upload an invoice and watch the agents work.
             </p>
-            <Button size="lg" asChild className="mt-8">
-              <Link to={ROUTES.inbox}>
-                Open the inbox
-                <ArrowRight className="size-4" />
-              </Link>
-            </Button>
+            <MagneticButton className="mt-8">
+              <Button size="lg" asChild>
+                <Link to={ROUTES.inbox}>
+                  Open the inbox
+                  <ArrowRight className="size-4" />
+                </Link>
+              </Button>
+            </MagneticButton>
           </div>
         </Card>
       </section>

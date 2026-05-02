@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { useUIStore } from "@/store/ui"
 import { useHealth } from "@/api/health"
 import { ThemeToggle } from "./ThemeToggle"
+import { NotificationBell } from "./NotificationBell"
 import { cn } from "@/lib/utils"
 
 export function TopBar() {
@@ -47,6 +48,7 @@ export function TopBar() {
             </Badge>
           )}
 
+          <NotificationBell />
           <ThemeToggle />
 
           <Button variant="ghost" size="icon" className="size-9">
