@@ -1,10 +1,10 @@
 import { useState } from "react"
-import { Inbox } from "lucide-react"
 
 import { PageHeader } from "@/components/shared/PageHeader"
 import { InvoiceUploadZone } from "@/components/invoice/InvoiceUploadZone"
 import { InvoiceTable } from "@/components/invoice/InvoiceTable"
 import { EmptyState } from "@/components/shared/EmptyState"
+import { EmptyInbox } from "@/components/shared/illustrations/EmptyInbox"
 import { TableSkeleton } from "@/components/shared/LoadingSkeleton"
 import { useInvoices } from "@/api/invoices"
 import { Button } from "@/components/ui/button"
@@ -65,7 +65,7 @@ export function InboxPage() {
         ) : !filtered || filtered.length === 0 ? (
           <div className="rounded-xl border border-border/60 bg-card">
             <EmptyState
-              icon={Inbox}
+              illustration={<EmptyInbox className="w-full" />}
               title="No invoices yet"
               description="Upload your first invoice to begin reconciliation."
             />

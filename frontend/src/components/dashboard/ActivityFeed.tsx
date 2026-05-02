@@ -8,6 +8,7 @@ import { useInvoices } from "@/api/invoices"
 import { formatRelative, formatCurrency, shortId } from "@/lib/format"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/shared/EmptyState"
+import { EmptyInbox } from "@/components/shared/illustrations/EmptyInbox"
 
 export function ActivityFeed() {
   const { data: invoices, isLoading } = useInvoices()
@@ -26,7 +27,7 @@ export function ActivityFeed() {
           ))
         ) : recent.length === 0 ? (
           <EmptyState
-            icon={FileText}
+            illustration={<EmptyInbox className="w-full" />}
             title="No invoices yet"
             description="Upload an invoice to get started"
           />

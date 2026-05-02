@@ -27,6 +27,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { EmptyState } from "@/components/shared/EmptyState"
+import { AllClear } from "@/components/shared/illustrations/AllClear"
 import { TableSkeleton } from "@/components/shared/LoadingSkeleton"
 import {
   useApproveException,
@@ -244,7 +245,7 @@ export function ExceptionsPage() {
       ) : !invoices || invoices.length === 0 ? (
         <Card>
           <EmptyState
-            icon={CheckCircle2}
+            illustration={<AllClear className="w-full" />}
             title="All clear"
             description="No invoices currently need review. Great work!"
           />

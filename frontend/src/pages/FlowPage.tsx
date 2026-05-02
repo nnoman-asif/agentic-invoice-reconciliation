@@ -6,6 +6,7 @@ import { FlowScene } from "@/components/flow/FlowScene"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { EmptyState } from "@/components/shared/EmptyState"
+import { EmptyInbox } from "@/components/shared/illustrations/EmptyInbox"
 import { Skeleton } from "@/components/ui/skeleton"
 
 export function FlowPage() {
@@ -43,7 +44,7 @@ export function FlowPage() {
           <Skeleton className="absolute inset-0" />
         ) : !invoices || invoices.length === 0 ? (
           <EmptyState
-            icon={Sparkles}
+            illustration={<EmptyInbox className="w-full" />}
             title="No invoices to visualize"
             description="Upload an invoice to see it flow through the pipeline in 3D"
           />

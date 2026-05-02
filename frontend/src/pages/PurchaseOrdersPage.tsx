@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { motion } from "framer-motion"
-import { Search, ShoppingCart } from "lucide-react"
+import { Search } from "lucide-react"
 
 import { PageHeader } from "@/components/shared/PageHeader"
 import { Input } from "@/components/ui/input"
@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { TableSkeleton } from "@/components/shared/LoadingSkeleton"
 import { EmptyState } from "@/components/shared/EmptyState"
+import { NoData } from "@/components/shared/illustrations/NoData"
 import { VendorBadge } from "@/components/shared/VendorBadge"
 import { usePurchaseOrders } from "@/api/purchase-orders"
 import { formatCurrency, formatDate } from "@/lib/format"
@@ -48,7 +49,7 @@ export function PurchaseOrdersPage() {
       ) : !filtered || filtered.length === 0 ? (
         <Card>
           <EmptyState
-            icon={ShoppingCart}
+            illustration={<NoData className="w-full" />}
             title="No purchase orders"
             description={
               search ? "No POs match your search" : "Run the seed script to load sample POs"

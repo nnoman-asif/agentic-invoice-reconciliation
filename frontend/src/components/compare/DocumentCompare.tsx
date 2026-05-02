@@ -8,6 +8,7 @@ import { PDFViewer } from "./PDFViewer"
 import { MatchedItemCard } from "./MatchedItemCard"
 import { ConfidenceBar } from "@/components/shared/ConfidenceBar"
 import { EmptyState } from "@/components/shared/EmptyState"
+import { NoMatches } from "@/components/shared/illustrations/NoMatches"
 import type { Invoice, Reconciliation } from "@/api/types"
 import { API_BASE_URL } from "@/api/client"
 import { cn } from "@/lib/utils"
@@ -175,7 +176,7 @@ export function DocumentCompare({ invoice, reconciliation }: Props) {
           <div className="flex-1 overflow-auto p-4 space-y-3">
             {reconciliation.line_item_matches.length === 0 ? (
               <EmptyState
-                icon={FileSearch}
+                illustration={<NoMatches className="w-full" />}
                 title="No matches"
                 description="The agent could not find matching line items"
               />

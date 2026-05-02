@@ -1,7 +1,7 @@
 import { motion } from "framer-motion"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
 import { EmptyState } from "@/components/shared/EmptyState"
-import { Sparkles } from "lucide-react"
+import { AllClear } from "@/components/shared/illustrations/AllClear"
 
 interface Props {
   discrepancies: Record<string, number>
@@ -33,9 +33,9 @@ export function TopDiscrepanciesChart({ discrepancies }: Props) {
       <CardContent>
         {entries.length === 0 ? (
           <EmptyState
-            icon={Sparkles}
+            illustration={<AllClear className="w-full" />}
             title="No discrepancies yet"
-            description="Process invoices to see discrepancy patterns"
+            description="Every reconciliation has been clean so far"
           />
         ) : (
           <div className="space-y-3">

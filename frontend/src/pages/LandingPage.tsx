@@ -1,49 +1,52 @@
 import { Link } from "react-router-dom"
 import { motion } from "framer-motion"
-import {
-  ArrowRight,
-  Sparkles,
-  Workflow,
-  GitCompare,
-  Bot,
-  Zap,
-  ShieldCheck,
-  LineChart,
-} from "lucide-react"
+import { ArrowRight, Sparkles } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { MagneticButton } from "@/components/shared/MagneticButton"
+import { HeroAnimation } from "@/components/landing/HeroAnimation"
+import { LiveStats } from "@/components/landing/LiveStats"
+import {
+  FeatureMiniDiagram,
+  type FeatureVariant,
+} from "@/components/landing/FeatureMiniDiagram"
 import { ROUTES } from "@/lib/routes"
 
-const FEATURES = [
+interface Feature {
+  variant: FeatureVariant
+  title: string
+  desc: string
+}
+
+const FEATURES: Feature[] = [
   {
-    icon: Bot,
+    variant: "pipeline",
     title: "Multi-agent pipeline",
     desc: "4 specialized LangGraph agents work together to parse, match, detect anomalies, and resolve.",
   },
   {
-    icon: Workflow,
+    variant: "visualizer",
     title: "Live visualizer",
     desc: "Watch each agent execute in real-time with timing per stage and inspect their outputs.",
   },
   {
-    icon: GitCompare,
+    variant: "compare",
     title: "Side-by-side compare",
     desc: "See the invoice next to matched PO and delivery data with animated match lines.",
   },
   {
-    icon: ShieldCheck,
+    variant: "human-loop",
     title: "Human-in-the-loop",
     desc: "Auto-approve clean matches, route exceptions to humans with agent recommendations.",
   },
   {
-    icon: LineChart,
+    variant: "observability",
     title: "Full observability",
     desc: "Every agent step traced via Langfuse with processing time and cost metrics.",
   },
   {
-    icon: Zap,
+    variant: "local-llm",
     title: "Local LLM",
     desc: "Runs entirely on your hardware via Ollama and Qwen 2.5. Zero API costs.",
   },
@@ -84,7 +87,7 @@ export function LandingPage() {
       </header>
 
       {/* Hero */}
-      <section className="relative z-10 max-w-7xl mx-auto px-6 pt-16 pb-24 sm:pt-24 sm:pb-32 text-center">
+      <section className="relative z-10 max-w-7xl mx-auto px-6 pt-16 pb-20 sm:pt-24 sm:pb-28 text-center">
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -120,44 +123,35 @@ export function LandingPage() {
           </div>
         </motion.div>
 
+        {/* Animated hero showing live mini pipeline */}
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.8, delay: 0.2 }}
-          className="mt-16 sm:mt-24 relative"
+          className="mt-14 sm:mt-20 relative"
         >
-          <div className="relative mx-auto max-w-4xl rounded-2xl border border-border/60 bg-card/50 backdrop-blur-2xl shadow-elevated overflow-hidden">
-            <div className="aspect-[16/9] relative">
-              <div className="absolute top-0 left-1/4 size-96 bg-blue-500/30 rounded-full blur-3xl animate-float" />
-              <div
-                className="absolute bottom-0 right-1/4 size-96 bg-purple-500/30 rounded-full blur-3xl animate-float"
-                style={{ animationDelay: "1.5s" }}
-              />
-              <div className="relative h-full flex items-center justify-center">
-                <div className="grid grid-cols-4 gap-8">
-                  {["Parser", "Matcher", "Anomaly", "Resolution"].map(
-                    (label, i) => (
-                      <motion.div
-                        key={label}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.4 + i * 0.1 }}
-                        className="flex flex-col items-center"
-                      >
-                        <div
-                          className={`size-14 rounded-full bg-gradient-to-br from-blue-500/20 to-indigo-500/20 border-2 border-primary/30 flex items-center justify-center shadow-glow ${i === 1 ? "animate-pulse-glow" : ""}`}
-                        >
-                          <div className="size-2.5 rounded-full bg-primary" />
-                        </div>
-                        <div className="mt-2 text-xs font-medium">{label}</div>
-                      </motion.div>
-                    )
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+          <HeroAnimation />
         </motion.div>
+      </section>
+
+      {/* Live stats */}
+      <section className="relative z-10 max-w-7xl mx-auto px-6 pb-20">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+          className="text-center mb-10"
+        >
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
+            Working right now.
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground max-w-xl mx-auto">
+            Numbers below are live from the running database — every value
+            updates as invoices flow through the pipeline.
+          </p>
+        </motion.div>
+        <LiveStats />
       </section>
 
       {/* Features grid */}
@@ -187,9 +181,9 @@ export function LandingPage() {
               viewport={{ once: true }}
               transition={{ delay: i * 0.05, duration: 0.4 }}
             >
-              <Card className="p-6 h-full hover:shadow-elevated transition-shadow">
-                <div className="size-10 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
-                  <f.icon className="size-5 text-primary" />
+              <Card className="p-6 h-full hover:shadow-elevated transition-all hover:-translate-y-0.5 group">
+                <div className="rounded-xl bg-muted/40 border border-border/40 mb-5 p-3 group-hover:border-primary/30 transition-colors">
+                  <FeatureMiniDiagram variant={f.variant} />
                 </div>
                 <h3 className="font-semibold text-lg mb-1.5">{f.title}</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">

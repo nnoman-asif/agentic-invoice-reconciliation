@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { PageSkeleton } from "@/components/shared/LoadingSkeleton"
 import { EmptyState } from "@/components/shared/EmptyState"
+import { NoData } from "@/components/shared/illustrations/NoData"
+import { NoMatches } from "@/components/shared/illustrations/NoMatches"
 import { DocumentCompare } from "@/components/compare/DocumentCompare"
 import { useInvoice, useInvoiceReconciliation } from "@/api/invoices"
 import { ROUTES } from "@/lib/routes"
@@ -22,7 +24,7 @@ export function CompareViewPage() {
     return (
       <Card>
         <EmptyState
-          icon={GitCompare}
+          illustration={<NoData className="w-full" />}
           title="Invoice not found"
           description="This invoice may have been deleted"
         />
@@ -42,7 +44,7 @@ export function CompareViewPage() {
       {!recon ? (
         <Card>
           <EmptyState
-            icon={GitCompare}
+            illustration={<NoMatches className="w-full" />}
             title="No reconciliation yet"
             description="Comparison view becomes available after the agent pipeline completes"
           />

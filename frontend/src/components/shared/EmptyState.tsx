@@ -2,7 +2,10 @@ import { motion } from "framer-motion"
 import { cn } from "@/lib/utils"
 
 interface EmptyStateProps {
-  icon: React.ComponentType<{ className?: string }>
+  /** Falls back to a simple icon tile if no illustration is provided. */
+  icon?: React.ComponentType<{ className?: string }>
+  /** Custom illustration takes priority over icon. */
+  illustration?: React.ReactNode
   title: string
   description?: string
   action?: React.ReactNode
@@ -11,6 +14,7 @@ interface EmptyStateProps {
 
 export function EmptyState({
   icon: Icon,
+  illustration,
   title,
   description,
   action,
@@ -25,9 +29,13 @@ export function EmptyState({
         className
       )}
     >
-      <div className="size-14 rounded-2xl bg-muted/50 border border-border/60 flex items-center justify-center mb-4">
-        <Icon className="size-6 text-muted-foreground" />
-      </div>
+      {illustration ? (
+        <div className="mb-2 w-full max-w-[220px]">{illustration}</div>
+      ) : Icon ? (
+        <div className="size-14 rounded-2xl bg-muted/50 border border-border/60 flex items-center justify-center mb-4">
+          <Icon className="size-6 text-muted-foreground" />
+        </div>
+      ) : null}
       <h3 className="text-lg font-semibold mb-1.5">{title}</h3>
       {description && (
         <p className="text-sm text-muted-foreground max-w-sm mb-4">

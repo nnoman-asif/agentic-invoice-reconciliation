@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react"
-import { Workflow } from "lucide-react"
 
 import { PageHeader } from "@/components/shared/PageHeader"
 import { PipelineVisualizer } from "@/components/pipeline/PipelineVisualizer"
@@ -7,6 +6,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { EmptyState } from "@/components/shared/EmptyState"
+import { EmptyInbox } from "@/components/shared/illustrations/EmptyInbox"
+import { NoData } from "@/components/shared/illustrations/NoData"
 import { useInvoices } from "@/api/invoices"
 import { ProcessingStatusBadge } from "@/components/invoice/ProcessingStatusBadge"
 import { formatRelative, shortId } from "@/lib/format"
@@ -45,7 +46,7 @@ export function PipelinePage() {
       ) : !invoices || invoices.length === 0 ? (
         <Card>
           <EmptyState
-            icon={Workflow}
+            illustration={<EmptyInbox className="w-full" />}
             title="No invoices yet"
             description="Upload an invoice to see the pipeline in action."
           />
@@ -95,7 +96,7 @@ export function PipelinePage() {
             ) : (
               <Card>
                 <EmptyState
-                  icon={Workflow}
+                  illustration={<NoData className="w-full" />}
                   title="Select an invoice"
                   description="Pick an invoice from the list to visualize its pipeline"
                 />

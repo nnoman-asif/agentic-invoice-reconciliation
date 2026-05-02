@@ -25,6 +25,9 @@ import { LineItemMatchRow } from "@/components/invoice/LineItemMatchRow"
 import { ActivityTimeline } from "@/components/invoice/ActivityTimeline"
 import { ConfidenceBar } from "@/components/shared/ConfidenceBar"
 import { EmptyState } from "@/components/shared/EmptyState"
+import { AllClear } from "@/components/shared/illustrations/AllClear"
+import { NoData } from "@/components/shared/illustrations/NoData"
+import { NoMatches } from "@/components/shared/illustrations/NoMatches"
 import { VendorBadge } from "@/components/shared/VendorBadge"
 import { useInvoice, useInvoiceReconciliation } from "@/api/invoices"
 import { celebrateFromElement } from "@/lib/confetti"
@@ -250,7 +253,7 @@ export function InvoiceDetailPage() {
             <TabsContent value="matches" className="space-y-3">
               {recon.line_item_matches.length === 0 ? (
                 <EmptyState
-                  icon={FileText}
+                  illustration={<NoMatches className="w-full" />}
                   title="No line item matches"
                   description="The agent could not match any line items"
                 />
@@ -264,7 +267,7 @@ export function InvoiceDetailPage() {
             <TabsContent value="discrepancies" className="space-y-3">
               {recon.discrepancies.length === 0 ? (
                 <EmptyState
-                  icon={CheckCircle2}
+                  illustration={<AllClear className="w-full" />}
                   title="No discrepancies"
                   description="This invoice passed all anomaly checks"
                 />
@@ -325,7 +328,7 @@ export function InvoiceDetailPage() {
             <TabsContent value="reviews" className="space-y-3">
               {recon.human_reviews.length === 0 ? (
                 <EmptyState
-                  icon={CheckCircle2}
+                  illustration={<NoData className="w-full" />}
                   title="No human reviews"
                   description="This reconciliation has not been reviewed by a human yet"
                 />
@@ -370,7 +373,7 @@ export function InvoiceDetailPage() {
         </>
       ) : (
         <EmptyState
-          icon={FileText}
+          illustration={<NoData className="w-full" />}
           title="No reconciliation yet"
           description={
             invoice.processing_status === "failed"
