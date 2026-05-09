@@ -1,4 +1,4 @@
-"""Invoice processing service -- orchestrates the LangGraph pipeline."""
+"""Invoice processing service -- drives the LangGraph reconciliation pipeline."""
 
 import logging
 import re
@@ -18,7 +18,6 @@ from app.models.database import (
     Reconciliation,
 )
 from app.observability.tracing import create_trace, end_trace, trace_agent_step, flush as flush_traces
-from app.rag.retriever import find_similar_cases
 from app.tools.db_queries import check_duplicate_invoice
 
 logger = logging.getLogger(__name__)
@@ -29,6 +28,16 @@ logger = logging.getLogger(__name__)
 OUTCOME_SUCCEEDED = "succeeded"
 OUTCOME_SKIPPED_NOT_FOUND = "skipped_not_found"
 OUTCOME_FAILED = "failed"
+
+
+# After each named graph node finishes, set the invoice to this status
+# so the live pipeline visualizer reflects progress.
+_NODE_TO_STATUS_AFTER: dict[str, str] = {
+    "parse_invoice": "matching",
+    "match_records": "resolving",
+    "detect_anomalies": "resolving",
+    "rag_retrieve": "resolving",
+}
 
 
 def _sanitize_error(raw: str | None, max_len: int = 200) -> str:
@@ -87,124 +96,92 @@ async def process_invoice(invoice_id: uuid.UUID, db: AsyncSession) -> str:
         "processing_start_ms": start_time * 1000,
     }
 
+    # Accumulated state across nodes. LangGraph's stream_mode="updates"
+    # yields per-node deltas; we merge them so the pipeline's final
+    # output is available for persistence and tracing.
+    final_state: dict = dict(initial_state)
+    duplicate_short_circuit = False
+    node_timings: dict[str, float] = {}
+
     try:
-        from app.agents.parser_agent import parse_invoice
-        from app.agents.matcher_agent import match_records
-        from app.agents.anomaly_agent import detect_anomalies
-        from app.agents.resolution_agent import resolve
+        node_start = time.time()
+        async for chunk in reconciliation_graph.astream(
+            initial_state,
+            stream_mode="updates",
+        ):
+            for node_name, delta in chunk.items():
+                elapsed_ms = (time.time() - node_start) * 1000
+                node_timings[node_name] = elapsed_ms
+                node_start = time.time()
 
-        # Step 1: Parse
-        invoice.processing_status = "parsing"
-        await db.flush()
-        step_start = time.time()
-        state = parse_invoice(initial_state)
-        trace_agent_step(trace, "parser_agent", {"file": invoice.raw_file_path}, {
-            "invoice_number": state.get("invoice_number"),
-            "vendor_name": state.get("vendor_name"),
-            "line_items_count": len(state.get("line_items", [])),
-            "error": state.get("error"),
-        }, (time.time() - step_start) * 1000)
+                if delta:
+                    final_state.update(delta)
 
-        if state.get("error"):
-            await _handle_failure(invoice, state["error"], db)
-            flush_traces()
+                _record_node_trace(trace, node_name, final_state, elapsed_ms)
+
+                # Drive the live pipeline visualizer by advancing
+                # processing_status as each stage finishes.
+                next_status = _NODE_TO_STATUS_AFTER.get(node_name)
+                if next_status and invoice.processing_status != next_status:
+                    invoice.processing_status = next_status
+                    invoice.updated_at = datetime.now(timezone.utc)
+                    await db.flush()
+
+                # After parsing succeeds, run the duplicate-invoice
+                # check BEFORE we write invoice_number to the DB. This
+                # avoids a unique-constraint violation surfacing as a
+                # raw SQL error to the user.
+                if node_name == "parse_invoice":
+                    if final_state.get("error"):
+                        await _handle_failure(invoice, final_state["error"], db)
+                        flush_traces()
+                        return OUTCOME_FAILED
+
+                    parsed_number = final_state.get("invoice_number")
+                    if parsed_number:
+                        is_duplicate = await check_duplicate_invoice(
+                            db, parsed_number, invoice_id
+                        )
+                        if is_duplicate:
+                            await _handle_failure(
+                                invoice,
+                                f"Duplicate invoice: '{parsed_number}' already exists in the system",
+                                db,
+                            )
+                            flush_traces()
+                            duplicate_short_circuit = True
+                            break
+
+                # After matcher finishes, persist the resolved vendor_id
+                # so the UI can show the link even if a later step fails.
+                if node_name == "match_records" and final_state.get("vendor_id"):
+                    invoice.vendor_id = uuid.UUID(final_state["vendor_id"])
+                    await db.flush()
+
+            if duplicate_short_circuit:
+                break
+
+        if duplicate_short_circuit:
             return OUTCOME_FAILED
 
-        # Duplicate check BEFORE we write `invoice_number` to the DB.
-        # Without this, the unique-constraint violation surfaces as a
-        # raw SQL error in the UI (bug H1).
-        parsed_number = state.get("invoice_number")
-        if parsed_number:
-            is_duplicate = await check_duplicate_invoice(db, parsed_number, invoice_id)
-            if is_duplicate:
-                await _handle_failure(
-                    invoice,
-                    f"Duplicate invoice: '{parsed_number}' already exists in the system",
-                    db,
-                )
-                flush_traces()
-                return OUTCOME_FAILED
-
-        invoice.invoice_number = parsed_number
-        invoice.po_reference = state.get("po_reference")
-        invoice.invoice_date = _parse_date(state.get("invoice_date"))
-        invoice.due_date = _parse_date(state.get("due_date"))
-        invoice.total_amount = state.get("total_amount")
-        invoice.tax_amount = state.get("tax_amount")
-        invoice.parsed_data = state.get("parsed_data")
-        invoice.processing_status = "matching"
-        invoice.updated_at = datetime.now(timezone.utc)
+        # Pull parser-derived fields onto the row.
+        invoice.invoice_number = final_state.get("invoice_number")
+        invoice.po_reference = final_state.get("po_reference")
+        invoice.invoice_date = _parse_date(final_state.get("invoice_date"))
+        invoice.due_date = _parse_date(final_state.get("due_date"))
+        invoice.total_amount = final_state.get("total_amount")
+        invoice.tax_amount = final_state.get("tax_amount")
+        invoice.parsed_data = final_state.get("parsed_data")
         await db.flush()
 
-        # Step 2: Match
-        step_start = time.time()
-        state = await match_records(state)
-        trace_agent_step(trace, "matcher_agent", {
-            "vendor_name": state.get("vendor_name"),
-            "po_reference": state.get("po_reference"),
-        }, {
-            "vendor_found": state.get("vendor_found"),
-            "matched_po": state.get("matched_po", {}).get("po_number") if state.get("matched_po") else None,
-            "line_matches_count": len(state.get("line_item_matches", [])),
-        }, (time.time() - step_start) * 1000)
-
-        if state.get("vendor_id"):
-            invoice.vendor_id = uuid.UUID(state["vendor_id"])
-            await db.flush()
-
-        # Step 3: Detect anomalies
-        invoice.processing_status = "resolving"
-        await db.flush()
-        step_start = time.time()
-        state = await detect_anomalies(state)
-        trace_agent_step(trace, "anomaly_agent", {
-            "line_matches_count": len(state.get("line_item_matches", [])),
-        }, {
-            "discrepancies_count": len(state.get("discrepancies", [])),
-            "discrepancies": state.get("discrepancies", []),
-            "is_duplicate": state.get("is_duplicate"),
-        }, (time.time() - step_start) * 1000)
-
-        # Step 4: RAG similar cases
-        step_start = time.time()
-        try:
-            from app.agents.resolution_agent import _build_summary
-            summary = _build_summary(state)
-            similar_cases = await find_similar_cases(db, summary, top_k=3)
-            state["similar_cases"] = similar_cases
-        except Exception as e:
-            logger.warning(f"[InvoiceService] RAG retrieval failed: {e}")
-            state["similar_cases"] = []
-            await db.rollback()
-            stmt = select(Invoice).where(Invoice.id == invoice_id)
-            result = await db.execute(stmt)
-            invoice = result.scalar_one()
-        trace_agent_step(trace, "rag_retrieval", {
-            "query": "similar reconciliation cases",
-        }, {
-            "similar_cases_found": len(state.get("similar_cases", [])),
-        }, (time.time() - step_start) * 1000)
-
-        # Step 5: Resolve
-        step_start = time.time()
-        state = resolve(state)
-        trace_agent_step(trace, "resolution_agent", {
-            "discrepancies_count": len(state.get("discrepancies", [])),
-            "similar_cases_count": len(state.get("similar_cases", [])),
-        }, {
-            "match_type": state.get("match_type"),
-            "overall_status": state.get("overall_status"),
-            "confidence_score": state.get("confidence_score"),
-            "recommendation": state.get("agent_recommendation"),
-        }, (time.time() - step_start) * 1000)
-
-        # Persist results
+        # Persist reconciliation, line matches, discrepancies, and the
+        # final invoice status.
         processing_time_ms = int((time.time() - start_time) * 1000)
         try:
-            state["trace_id"] = trace.id if trace else None
+            final_state["trace_id"] = trace.id if trace else None
         except Exception:
-            state["trace_id"] = None
-        await _persist_results(invoice, state, processing_time_ms, db)
+            final_state["trace_id"] = None
+        await _persist_results(invoice, final_state, processing_time_ms, db)
 
         end_trace(trace)
         flush_traces()
@@ -225,6 +202,55 @@ async def process_invoice(invoice_id: uuid.UUID, db: AsyncSession) -> str:
         except Exception as inner_e:
             logger.error(f"[InvoiceService] Could not record failure for {invoice_id}: {inner_e}")
         return OUTCOME_FAILED
+
+
+def _record_node_trace(trace, node_name: str, state: dict, elapsed_ms: float) -> None:
+    """Emit a per-node Langfuse span with the most useful slice of state."""
+    if node_name == "parse_invoice":
+        out = {
+            "invoice_number": state.get("invoice_number"),
+            "vendor_name": state.get("vendor_name"),
+            "line_items_count": len(state.get("line_items", [])),
+            "error": state.get("error"),
+        }
+        inp = {"file": state.get("raw_file_path")}
+    elif node_name == "match_records":
+        matched_po = state.get("matched_po")
+        out = {
+            "vendor_found": state.get("vendor_found"),
+            "matched_po": matched_po.get("po_number") if matched_po else None,
+            "line_matches_count": len(state.get("line_item_matches", [])),
+        }
+        inp = {
+            "vendor_name": state.get("vendor_name"),
+            "po_reference": state.get("po_reference"),
+        }
+    elif node_name == "detect_anomalies":
+        out = {
+            "discrepancies_count": len(state.get("discrepancies", [])),
+            "discrepancies": state.get("discrepancies", []),
+            "is_duplicate": state.get("is_duplicate"),
+        }
+        inp = {"line_matches_count": len(state.get("line_item_matches", []))}
+    elif node_name == "rag_retrieve":
+        out = {"similar_cases_found": len(state.get("similar_cases", []))}
+        inp = {"query": "similar reconciliation cases"}
+    elif node_name == "resolve":
+        out = {
+            "match_type": state.get("match_type"),
+            "overall_status": state.get("overall_status"),
+            "confidence_score": state.get("confidence_score"),
+            "recommendation": state.get("agent_recommendation"),
+        }
+        inp = {
+            "discrepancies_count": len(state.get("discrepancies", [])),
+            "similar_cases_count": len(state.get("similar_cases", [])),
+        }
+    else:
+        # error_handler and any future nodes
+        out = {k: state.get(k) for k in ("match_type", "overall_status", "error")}
+        inp = {}
+    trace_agent_step(trace, node_name, inp, out, elapsed_ms)
 
 
 async def _persist_results(

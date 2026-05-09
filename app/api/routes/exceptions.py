@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime, timezone
 
@@ -14,8 +15,22 @@ from app.models.schemas import (
     ReviewRequest,
     HumanReviewResponse,
 )
+from app.rag.indexer import index_reconciliation
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+async def _index_safely(db: AsyncSession, reconciliation_id: uuid.UUID) -> None:
+    """Index a reconciliation for RAG; never let an indexing failure
+    bubble up and reverse the human review the user just made."""
+    try:
+        await index_reconciliation(db, reconciliation_id)
+    except Exception as e:
+        logger.warning(
+            f"[Exceptions] RAG indexing failed for {reconciliation_id}: {e}"
+        )
 
 
 @router.get("/exceptions", response_model=list[InvoiceListResponse])
@@ -68,6 +83,12 @@ async def approve_exception(
     # as a TZ-aware datetime rather than the Python-side naive default,
     # ensuring the POST response matches what GET returns later.
     await db.refresh(review)
+
+    # Capture the (now-decided) reconciliation in the RAG store so the
+    # resolution agent can reference this human decision next time a
+    # similar case appears.
+    await _index_safely(db, reconciliation_id)
+
     return review
 
 
@@ -104,4 +125,5 @@ async def reject_exception(
 
     await db.flush()
     await db.refresh(review)
+    await _index_safely(db, reconciliation_id)
     return review
