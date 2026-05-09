@@ -4,8 +4,15 @@ import type {
   Invoice,
   InvoiceListItem,
   InvoiceUploadResponse,
-  Reconciliation,
 } from "./types"
+
+// Re-exported from the canonical reconciliation module. Older callsites
+// imported `useInvoiceReconciliation` from here; keep that working but
+// route them through the single shared hook so cache keys are unified.
+export {
+  useReconciliationByInvoice as useInvoiceReconciliation,
+  reconciliationKeys,
+} from "./reconciliations"
 
 export const invoiceKeys = {
   all: ["invoices"] as const,
@@ -14,8 +21,6 @@ export const invoiceKeys = {
     [...invoiceKeys.lists(), filters] as const,
   details: () => [...invoiceKeys.all, "detail"] as const,
   detail: (id: string) => [...invoiceKeys.details(), id] as const,
-  reconciliation: (id: string) =>
-    [...invoiceKeys.all, "reconciliation", id] as const,
 }
 
 export function useInvoices(filters?: {
@@ -70,20 +75,6 @@ export function useInvoice(id: string | undefined) {
         data.processing_status === "resolving"
       return isProcessing ? 1500 : false
     },
-  })
-}
-
-export function useInvoiceReconciliation(id: string | undefined) {
-  return useQuery({
-    queryKey: invoiceKeys.reconciliation(id ?? ""),
-    queryFn: async () => {
-      const { data } = await apiClient.get<Reconciliation>(
-        `/api/invoices/${id}/reconciliation`
-      )
-      return data
-    },
-    enabled: !!id,
-    retry: false,
   })
 }
 

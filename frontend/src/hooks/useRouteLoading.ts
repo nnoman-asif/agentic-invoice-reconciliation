@@ -1,20 +1,19 @@
 import { useEffect, useState } from "react"
 import { useLocation } from "react-router-dom"
-import { useIsFetching } from "@tanstack/react-query"
 
 /**
- * Returns true while a route transition is in progress or queries are
- * actively fetching. Used to drive the top-of-page progress bar.
+ * Returns true for ~400ms after each route change so the top-of-page
+ * progress bar flashes during navigation.
  *
- * Strategy:
- * - On every pathname change, briefly enter "loading" for ~400ms
- * - Also reflect TanStack Query's global fetch counter (any active fetch)
- * - This produces a satisfying progress bar without coupling to any
- *   specific data layer
+ * Important: this used to also follow `useIsFetching()` from TanStack
+ * Query, which made the bar visible whenever ANY query was in flight.
+ * With the inbox / detail pages polling every couple of seconds during
+ * processing, that meant the loading bar was on almost continuously --
+ * not what a navigation indicator should signal. Polling now stays
+ * silent; the bar only reflects route transitions.
  */
 export function useRouteLoading(): boolean {
   const location = useLocation()
-  const fetchingCount = useIsFetching()
   const [routeLoading, setRouteLoading] = useState(false)
 
   useEffect(() => {
@@ -23,5 +22,5 @@ export function useRouteLoading(): boolean {
     return () => window.clearTimeout(t)
   }, [location.pathname])
 
-  return routeLoading || fetchingCount > 0
+  return routeLoading
 }

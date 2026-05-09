@@ -50,7 +50,9 @@ export function InvoiceDetailPage() {
     error,
     refetch,
   } = useInvoice(id)
-  const { data: recon } = useInvoiceReconciliation(id)
+  const { data: recon } = useInvoiceReconciliation(id, {
+    invoiceProcessingStatus: invoice?.processing_status,
+  })
 
   // Trigger confetti once per approved invoice (auto OR manual). Track
   // a Set of celebrated ids in a ref so revisiting an already-celebrated

@@ -53,7 +53,9 @@ const STATUS_TO_INDEX: Record<ProcessingStatus, number> = {
 
 export function useLivePipeline(invoiceId: string | undefined) {
   const { data: invoice } = useInvoice(invoiceId)
-  const { data: recon } = useInvoiceReconciliation(invoiceId)
+  const { data: recon } = useInvoiceReconciliation(invoiceId, {
+    invoiceProcessingStatus: invoice?.processing_status,
+  })
 
   return useMemo<{
     stages: AgentStageState[]

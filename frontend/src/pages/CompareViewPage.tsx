@@ -14,7 +14,9 @@ import { ROUTES } from "@/lib/routes"
 export function CompareViewPage() {
   const { id } = useParams<{ id: string }>()
   const { data: invoice, isLoading } = useInvoice(id)
-  const { data: recon, isLoading: reconLoading } = useInvoiceReconciliation(id)
+  const { data: recon, isLoading: reconLoading } = useInvoiceReconciliation(id, {
+    invoiceProcessingStatus: invoice?.processing_status,
+  })
 
   if (isLoading || reconLoading) {
     return <PageSkeleton />
