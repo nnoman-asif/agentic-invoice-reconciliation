@@ -1,3 +1,4 @@
+import logging
 import uuid
 from pathlib import Path
 
@@ -16,7 +17,15 @@ from app.models.schemas import (
     ReconciliationResponse,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
+
+# Strict allow-lists for upload validation. Anything else is rejected
+# at the HTTP layer so it never enters the worker pipeline.
+PDF_MAGIC = b"%PDF-"
+ALLOWED_EXTENSIONS = {".pdf"}
+ALLOWED_CONTENT_TYPES = {"application/pdf", "application/x-pdf"}
 
 
 @router.post("/invoices/upload", response_model=InvoiceUploadResponse, status_code=201)
@@ -25,15 +34,51 @@ async def upload_invoice(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
 ):
-    if file.size and file.size > settings.max_upload_size_mb * 1024 * 1024:
+    # ── Validation ─────────────────────────────────────────────────
+    # Size cap (early exit before reading body)
+    if file.size is not None and file.size > settings.max_upload_size_mb * 1024 * 1024:
         raise HTTPException(status_code=413, detail="File too large")
+    if file.size == 0:
+        raise HTTPException(status_code=400, detail="File is empty")
 
-    invoice_id = uuid.uuid4()
-    ext = Path(file.filename).suffix if file.filename else ".pdf"
-    file_path = f"{settings.upload_dir}/{invoice_id}{ext}"
+    # Extension whitelist
+    ext = Path(file.filename).suffix.lower() if file.filename else ""
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=415,
+            detail=(
+                f"Unsupported file extension '{ext or '(none)'}'. "
+                f"Only {', '.join(sorted(ALLOWED_EXTENSIONS))} is allowed."
+            ),
+        )
 
-    Path(file_path).parent.mkdir(parents=True, exist_ok=True)
+    # Content-type whitelist (browser-set; not authoritative on its own
+    # but rejecting obviously-wrong types gives a clearer error)
+    if file.content_type and file.content_type not in ALLOWED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=415,
+            detail=(
+                f"Unsupported content type '{file.content_type}'. "
+                "Only application/pdf is allowed."
+            ),
+        )
+
+    # Read the body and verify the PDF magic header. This catches
+    # spoofed extensions and zero-byte payloads regardless of what
+    # `file.size` reported (some clients omit Content-Length).
     content = await file.read()
+    if len(content) == 0:
+        raise HTTPException(status_code=400, detail="File is empty")
+    if not content.startswith(PDF_MAGIC):
+        raise HTTPException(
+            status_code=415,
+            detail="File content is not a valid PDF (missing %PDF- header).",
+        )
+
+    # ── Persist file + DB row ──────────────────────────────────────
+    invoice_id = uuid.uuid4()
+    file_path = f"{settings.upload_dir}/{invoice_id}{ext}"
+    Path(file_path).parent.mkdir(parents=True, exist_ok=True)
     with open(file_path, "wb") as f:
         f.write(content)
 
@@ -45,9 +90,25 @@ async def upload_invoice(
         file_content_type=file.content_type,
     )
     db.add(invoice)
-    await db.flush()
 
-    await request.app.state.redis.lpush("invoice_queue", str(invoice_id))
+    # COMMIT BEFORE ENQUEUE -- otherwise the worker can race ahead and
+    # see "invoice not found" because the upload's transaction is still
+    # open (this was bug C3).
+    await db.commit()
+    await db.refresh(invoice)
+
+    try:
+        await request.app.state.redis.lpush("invoice_queue", str(invoice_id))
+    except Exception as e:
+        logger.error(f"[Upload] Redis enqueue failed for invoice {invoice_id}: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Invoice saved but could not be queued for processing. "
+                "Use POST /api/webhooks/invoice-received with "
+                f'{{"invoice_id": "{invoice_id}"}} to retry.'
+            ),
+        ) from e
 
     return invoice
 

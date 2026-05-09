@@ -1,6 +1,7 @@
 """Invoice processing service -- orchestrates the LangGraph pipeline."""
 
 import logging
+import re
 import time
 import uuid
 from datetime import date, datetime, timezone
@@ -18,12 +19,47 @@ from app.models.database import (
 )
 from app.observability.tracing import create_trace, end_trace, trace_agent_step, flush as flush_traces
 from app.rag.retriever import find_similar_cases
+from app.tools.db_queries import check_duplicate_invoice
 
 logger = logging.getLogger(__name__)
 
 
-async def process_invoice(invoice_id: uuid.UUID, db: AsyncSession) -> None:
-    """Run the full reconciliation pipeline for an invoice."""
+# Outcome constants returned by `process_invoice` so the worker can
+# distinguish transient races (retry) from real failures (drop).
+OUTCOME_SUCCEEDED = "succeeded"
+OUTCOME_SKIPPED_NOT_FOUND = "skipped_not_found"
+OUTCOME_FAILED = "failed"
+
+
+def _sanitize_error(raw: str | None, max_len: int = 200) -> str:
+    """Strip SQLAlchemy/asyncpg/stack noise from an exception message and truncate.
+
+    Raw asyncpg errors include `[SQL: ...]`, `[parameters: (...)]`, and class
+    prefixes like `(sqlalchemy.dialects.postgresql.asyncpg.IntegrityError)`.
+    Surfacing those verbatim in the UI is ugly and leaks internals; this
+    keeps just the first useful line, capped at `max_len` chars.
+    """
+    if not raw:
+        return "Unknown error"
+    first_line = raw.split("\n", 1)[0].strip()
+    clean = re.sub(r"\s*\[SQL:.*", "", first_line)
+    clean = re.sub(r"\s*\[parameters:.*", "", clean)
+    clean = re.sub(r"^\([\w.]+\.\w+(?:Error|Exception)\)\s*", "", clean)
+    clean = re.sub(r"<class '[^']+'>:\s*", "", clean)
+    clean = clean.strip()
+    return (clean[:max_len] if clean else "Unknown error")
+
+
+async def process_invoice(invoice_id: uuid.UUID, db: AsyncSession) -> str:
+    """Run the full reconciliation pipeline for an invoice.
+
+    Returns one of:
+      - ``OUTCOME_SUCCEEDED`` -- pipeline completed (status=completed)
+      - ``OUTCOME_SKIPPED_NOT_FOUND`` -- invoice row not visible yet
+        (worker should retry; this can happen if a job was enqueued
+        before the upload's transaction committed in another connection)
+      - ``OUTCOME_FAILED`` -- a fatal error was caught and recorded
+    """
     logger.info(f"[InvoiceService] Processing invoice {invoice_id}")
     start_time = time.time()
 
@@ -33,8 +69,11 @@ async def process_invoice(invoice_id: uuid.UUID, db: AsyncSession) -> None:
     result = await db.execute(stmt)
     invoice = result.scalar_one_or_none()
     if not invoice:
-        logger.error(f"[InvoiceService] Invoice {invoice_id} not found")
-        return
+        logger.warning(
+            f"[InvoiceService] Invoice {invoice_id} not found in DB "
+            "(possible upload-vs-worker race; will retry)"
+        )
+        return OUTCOME_SKIPPED_NOT_FOUND
 
     invoice.processing_status = "parsing"
     invoice.updated_at = datetime.now(timezone.utc)
@@ -69,9 +108,24 @@ async def process_invoice(invoice_id: uuid.UUID, db: AsyncSession) -> None:
         if state.get("error"):
             await _handle_failure(invoice, state["error"], db)
             flush_traces()
-            return
+            return OUTCOME_FAILED
 
-        invoice.invoice_number = state.get("invoice_number")
+        # Duplicate check BEFORE we write `invoice_number` to the DB.
+        # Without this, the unique-constraint violation surfaces as a
+        # raw SQL error in the UI (bug H1).
+        parsed_number = state.get("invoice_number")
+        if parsed_number:
+            is_duplicate = await check_duplicate_invoice(db, parsed_number, invoice_id)
+            if is_duplicate:
+                await _handle_failure(
+                    invoice,
+                    f"Duplicate invoice: '{parsed_number}' already exists in the system",
+                    db,
+                )
+                flush_traces()
+                return OUTCOME_FAILED
+
+        invoice.invoice_number = parsed_number
         invoice.po_reference = state.get("po_reference")
         invoice.invoice_date = _parse_date(state.get("invoice_date"))
         invoice.due_date = _parse_date(state.get("due_date"))
@@ -154,6 +208,7 @@ async def process_invoice(invoice_id: uuid.UUID, db: AsyncSession) -> None:
 
         end_trace(trace)
         flush_traces()
+        return OUTCOME_SUCCEEDED
 
     except Exception as e:
         logger.exception(f"[InvoiceService] Pipeline failed for invoice {invoice_id}")
@@ -169,6 +224,7 @@ async def process_invoice(invoice_id: uuid.UUID, db: AsyncSession) -> None:
             await _handle_failure(invoice, str(e), db)
         except Exception as inner_e:
             logger.error(f"[InvoiceService] Could not record failure for {invoice_id}: {inner_e}")
+        return OUTCOME_FAILED
 
 
 async def _persist_results(
@@ -229,9 +285,21 @@ async def _persist_results(
         if not inv_line_id and db_line_items:
             inv_line_id = db_line_items[min(i, len(db_line_items) - 1)].id
 
+        # If we still have no real invoice_line_item to associate with,
+        # skip the match rather than insert a row with a dangling FK.
+        # (The original code used `or db_line_items[0].id if db_line_items
+        # else uuid.uuid4()`, which due to operator precedence could
+        # produce a random UUID -> guaranteed FK violation. Bug L9.)
+        if not inv_line_id:
+            logger.warning(
+                f"[InvoiceService] Skipping line_item_match #{i + 1} for invoice "
+                f"{invoice.id}: no invoice_line_item available"
+            )
+            continue
+
         lim = LineItemMatch(
             reconciliation_id=reconciliation.id,
-            invoice_line_item_id=inv_line_id or db_line_items[0].id if db_line_items else uuid.uuid4(),
+            invoice_line_item_id=inv_line_id,
             po_line_item_id=uuid.UUID(match["po_line_item_id"]) if match.get("po_line_item_id") else None,
             delivery_line_item_id=uuid.UUID(match["delivery_line_item_id"]) if match.get("delivery_line_item_id") else None,
             status=match.get("status", "unmatched"),
@@ -277,12 +345,18 @@ async def _persist_results(
 
 
 async def _handle_failure(invoice: Invoice, error: str, db: AsyncSession) -> None:
-    """Mark invoice as failed."""
+    """Mark invoice as failed with a sanitized, UI-safe error message.
+
+    Note: We intentionally KEEP the raw_file_path on failure so the user
+    can inspect what was uploaded. A periodic janitor process can sweep
+    old failed uploads if disk pressure becomes an issue.
+    """
+    clean = _sanitize_error(error)
     invoice.processing_status = "failed"
-    invoice.error_message = error
+    invoice.error_message = clean
     invoice.updated_at = datetime.now(timezone.utc)
     await db.flush()
-    logger.error(f"[InvoiceService] Invoice {invoice.id} failed: {error}")
+    logger.error(f"[InvoiceService] Invoice {invoice.id} failed: {clean}")
 
 
 def _parse_date(date_str: str | None) -> date | None:
