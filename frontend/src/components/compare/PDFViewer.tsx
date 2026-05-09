@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Document, Page, pdfjs } from "react-pdf"
 import {
   ChevronLeft,
@@ -20,8 +20,11 @@ import {
 import "react-pdf/dist/Page/AnnotationLayer.css"
 import "react-pdf/dist/Page/TextLayer.css"
 
-// Use CDN-hosted PDF worker to avoid bundling complications
-pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
+// Bundle the pdf.js worker locally so the viewer works offline / under
+// a strict CSP. Vite's `?url` import emits a content-hashed asset URL
+// served from the same origin, replacing the previous unpkg.com CDN.
+import pdfWorkerSrc from "pdfjs-dist/build/pdf.worker.min.mjs?url"
+pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerSrc
 
 interface Props {
   fileUrl: string
@@ -30,6 +33,13 @@ interface Props {
 const ZOOM_STEP = 0.2
 const MIN_ZOOM = 0.5
 const MAX_ZOOM = 2.5
+const MAX_BASE_WIDTH = 680
+const SIDE_PADDING = 100
+
+function computeBaseWidth(): number {
+  if (typeof window === "undefined") return MAX_BASE_WIDTH
+  return Math.max(200, Math.min(MAX_BASE_WIDTH, window.innerWidth - SIDE_PADDING))
+}
 
 export function PDFViewer({ fileUrl }: Props) {
   const [numPages, setNumPages] = useState<number>(0)
@@ -37,11 +47,35 @@ export function PDFViewer({ fileUrl }: Props) {
   const [scale, setScale] = useState(1)
   const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0)
   const [error, setError] = useState<string | null>(null)
+  // baseWidth tracks the viewport so the PDF reflows on window resize
+  // (it used to be captured once at mount and stayed wrong forever).
+  const [baseWidth, setBaseWidth] = useState<number>(() => computeBaseWidth())
 
-  const baseWidth = Math.min(680, window.innerWidth - 100)
+  useEffect(() => {
+    const onResize = () => setBaseWidth(computeBaseWidth())
+    window.addEventListener("resize", onResize)
+    return () => window.removeEventListener("resize", onResize)
+  }, [])
+
+  // When the user switches to a different invoice's compare view, the
+  // PDF changes but the page index from the previous one would persist
+  // (potentially out of range for the new doc). Reset every time the
+  // file URL changes, and forget the previous numPages/error too.
+  const lastFileUrl = useRef(fileUrl)
+  useEffect(() => {
+    if (lastFileUrl.current === fileUrl) return
+    lastFileUrl.current = fileUrl
+    setPage(1)
+    setNumPages(0)
+    setError(null)
+    setScale(1)
+    setRotation(0)
+  }, [fileUrl])
+
   const reset = () => {
     setScale(1)
     setRotation(0)
+    setPage(1)
   }
 
   const zoomIn = () => setScale((s) => Math.min(MAX_ZOOM, +(s + ZOOM_STEP).toFixed(2)))
@@ -138,7 +172,7 @@ export function PDFViewer({ fileUrl }: Props) {
           </Tooltip>
 
           {/* Reset (only when something is changed) */}
-          {(scale !== 1 || rotation !== 0) && (
+          {(scale !== 1 || rotation !== 0 || page !== 1) && (
             <Tooltip delayDuration={300}>
               <TooltipTrigger asChild>
                 <Button
