@@ -36,6 +36,7 @@ interface UIState {
   addNotification: (
     notification: Omit<AppNotification, "id" | "timestamp" | "read">
   ) => void
+  markRead: (id: string) => void
   markAllRead: () => void
   clearNotifications: () => void
 }
@@ -75,6 +76,26 @@ export const useUIStore = create<UIState>()(
           }
         }),
 
+      // Mark a single notification read on click. Used instead of
+      // mark-all-on-dropdown-open so unread state actually means
+      // "the user hasn't acknowledged this one yet".
+      markRead: (id) =>
+        set((state) => {
+          let changed = false
+          const notifications = state.notifications.map((n) => {
+            if (n.id === id && !n.read) {
+              changed = true
+              return { ...n, read: true }
+            }
+            return n
+          })
+          if (!changed) return state
+          return {
+            notifications,
+            unreadCount: notifications.filter((x) => !x.read).length,
+          }
+        }),
+
       markAllRead: () =>
         set((state) => ({
           notifications: state.notifications.map((n) => ({ ...n, read: true })),
@@ -86,9 +107,14 @@ export const useUIStore = create<UIState>()(
     }),
     {
       name: "ira-ui-store",
+      // Persist notifications + unreadCount across reloads so the user
+      // doesn't lose them on refresh. Bounded by MAX_NOTIFICATIONS in
+      // addNotification so localStorage never grows unbounded.
       partialize: (state) => ({
         theme: state.theme,
         sidebarCollapsed: state.sidebarCollapsed,
+        notifications: state.notifications,
+        unreadCount: state.unreadCount,
       }),
     }
   )

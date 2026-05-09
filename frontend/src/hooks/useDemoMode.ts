@@ -33,22 +33,45 @@ export function useDemoMode(): UseDemoModeReturn {
     })
 
     try {
-      let succeeded = 0
-      for (const sample of SAMPLE_FILES) {
-        const res = await fetch(sample.url)
-        if (!res.ok) {
-          throw new Error(`Could not load ${sample.name}`)
-        }
-        const blob = await res.blob()
-        const file = new File([blob], sample.name, { type: "application/pdf" })
-        await upload.mutateAsync(file)
-        succeeded++
+      // Upload each sample independently. Previously this loop did
+      // sequential `await` and aborted on the first failure -- so a
+      // 4xx on the second sample meant samples 1 and 3 never made it.
+      // `Promise.allSettled` lets every upload attempt complete and we
+      // report partial success in the toast.
+      const results = await Promise.allSettled(
+        SAMPLE_FILES.map(async (sample) => {
+          const res = await fetch(sample.url)
+          if (!res.ok) {
+            throw new Error(`Could not load ${sample.name}`)
+          }
+          const blob = await res.blob()
+          const file = new File([blob], sample.name, {
+            type: "application/pdf",
+          })
+          await upload.mutateAsync(file)
+        })
+      )
+
+      const succeeded = results.filter((r) => r.status === "fulfilled").length
+      const failed = results.length - succeeded
+
+      if (succeeded === 0) {
+        const firstError = results.find(
+          (r): r is PromiseRejectedResult => r.status === "rejected"
+        )
+        const message =
+          firstError?.reason instanceof Error
+            ? firstError.reason.message
+            : "All sample uploads failed"
+        toast.error("Demo failed", { id: toastId, description: message })
+        return false
       }
 
-      toast.success(`Demo started`, {
-        id: toastId,
-        description: `${succeeded} invoices uploaded. Watch them process in the inbox or pipeline view.`,
-      })
+      const description =
+        failed > 0
+          ? `${succeeded} of ${results.length} samples uploaded (${failed} failed). Watch them process in the inbox.`
+          : `${succeeded} invoices uploaded. Watch them process in the inbox or pipeline view.`
+      toast.success("Demo started", { id: toastId, description })
       return true
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : "Demo failed"

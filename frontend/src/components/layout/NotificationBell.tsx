@@ -1,4 +1,5 @@
-import { Link } from "react-router-dom"
+import { useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Bell,
@@ -8,6 +9,7 @@ import {
   FileUp,
   AlertOctagon,
   Trash2,
+  Check,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -34,13 +36,29 @@ const ICONS: Record<
 export function NotificationBell() {
   const notifications = useUIStore((s) => s.notifications)
   const unread = useUIStore((s) => s.unreadCount)
+  const markRead = useUIStore((s) => s.markRead)
   const markAllRead = useUIStore((s) => s.markAllRead)
   const clear = useUIStore((s) => s.clearNotifications)
+  const [open, setOpen] = useState(false)
+  const navigate = useNavigate()
+
+  const handleItemClick = (n: AppNotification) => {
+    if (!n.read) markRead(n.id)
+    setOpen(false)
+    navigate(`/invoices/${n.invoiceId}`)
+  }
 
   return (
-    <DropdownMenu onOpenChange={(open) => open && unread > 0 && markAllRead()}>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="size-9 relative">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-9 relative"
+          aria-label={
+            unread > 0 ? `Notifications (${unread} unread)` : "Notifications"
+          }
+        >
           <Bell className="size-4" />
           <AnimatePresence>
             {unread > 0 && (
@@ -67,18 +85,34 @@ export function NotificationBell() {
             )}
           </div>
           {notifications.length > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
-              onClick={(e) => {
-                e.stopPropagation()
-                clear()
-              }}
-            >
-              <Trash2 className="size-3" />
-              Clear
-            </Button>
+            <div className="flex items-center gap-1">
+              {unread > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    markAllRead()
+                  }}
+                >
+                  <Check className="size-3" />
+                  Read all
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  clear()
+                }}
+              >
+                <Trash2 className="size-3" />
+                Clear
+              </Button>
+            </div>
           )}
         </div>
 
@@ -99,10 +133,11 @@ export function NotificationBell() {
                 const Icon = cfg.icon
                 return (
                   <li key={n.id}>
-                    <Link
-                      to={`/invoices/${n.invoiceId}`}
+                    <button
+                      type="button"
+                      onClick={() => handleItemClick(n)}
                       className={cn(
-                        "flex items-start gap-3 px-3 py-2.5 hover:bg-accent/50 transition-colors",
+                        "w-full text-left flex items-start gap-3 px-3 py-2.5 hover:bg-accent/50 transition-colors",
                         !n.read && "bg-primary/5"
                       )}
                     >
@@ -116,7 +151,7 @@ export function NotificationBell() {
                       {!n.read && (
                         <span className="size-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
                       )}
-                    </Link>
+                    </button>
                   </li>
                 )
               })}

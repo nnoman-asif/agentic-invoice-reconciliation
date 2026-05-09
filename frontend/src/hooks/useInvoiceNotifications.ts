@@ -10,6 +10,13 @@ interface SnapshotEntry {
   invoice_number: string | null
 }
 
+// Only treat a `!prev` row as a real upload event if its created_at
+// is recent. This protects against the case where the first fetch
+// returns [] (so the snapshot seeds empty), and a later fetch returns
+// a bunch of pre-existing invoices that aren't actually freshly
+// uploaded by the user.
+const FRESH_UPLOAD_WINDOW_MS = 60_000
+
 /**
  * Watches invoice list for status transitions and dispatches notifications.
  * Mount once globally (e.g., inside <App /> or <AppShell />).
@@ -23,7 +30,11 @@ export function useInvoiceNotifications() {
   useEffect(() => {
     if (!invoices) return
 
-    // Seed initial snapshot - don't notify on first run
+    // Seed the initial snapshot from the first non-undefined fetch.
+    // Empty list still seeds (so we know "we've seen the truth once")
+    // but won't fire notifications. Subsequent !prev rows are checked
+    // against `FRESH_UPLOAD_WINDOW_MS` so an empty-then-populated
+    // refetch sequence doesn't storm notifications for stale rows.
     if (!seeded.current) {
       for (const inv of invoices) {
         snapshot.current.set(inv.id, {
@@ -36,12 +47,21 @@ export function useInvoiceNotifications() {
       return
     }
 
+    const liveIds = new Set<string>()
+
     for (const inv of invoices) {
+      liveIds.add(inv.id)
       const prev = snapshot.current.get(inv.id)
 
       if (!prev) {
-        // Newly seen invoice
-        if (inv.processing_status === "queued") {
+        // Newly seen invoice -- only notify if it's both queued AND
+        // young enough to plausibly be a fresh upload, not a stale
+        // row that just became visible to this client.
+        const ageMs = Date.now() - new Date(inv.created_at).getTime()
+        if (
+          inv.processing_status === "queued" &&
+          ageMs < FRESH_UPLOAD_WINDOW_MS
+        ) {
           addNotification({
             invoiceId: inv.id,
             invoiceNumber: inv.invoice_number,
@@ -109,6 +129,15 @@ export function useInvoiceNotifications() {
         business_status: inv.business_status,
         invoice_number: inv.invoice_number,
       })
+    }
+
+    // Prune snapshot entries for invoices that disappeared from the
+    // list (e.g., deleted upstream). Otherwise the map would grow
+    // forever, and a recycled UUID would be treated as "already seen".
+    if (snapshot.current.size > liveIds.size) {
+      for (const id of snapshot.current.keys()) {
+        if (!liveIds.has(id)) snapshot.current.delete(id)
+      }
     }
   }, [invoices, addNotification])
 }
