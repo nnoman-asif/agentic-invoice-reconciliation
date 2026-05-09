@@ -36,7 +36,10 @@ export function TopBar() {
 
         {/* Search trigger */}
         <button
+          type="button"
           onClick={() => setCommandOpen(true)}
+          aria-label="Open command palette"
+          aria-keyshortcuts="Control+K Meta+K"
           className="group flex items-center gap-3 w-full max-w-md px-3.5 h-10 rounded-lg border border-border/60 bg-background/60 hover:bg-accent/30 hover:border-border transition-all text-sm min-w-0"
         >
           <Search className="size-4 text-muted-foreground shrink-0" />
@@ -71,7 +74,12 @@ export function TopBar() {
           <NotificationBell />
           <ThemeToggle />
 
-          <Button variant="ghost" size="icon" className="size-9 hidden sm:inline-flex">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-9 hidden sm:inline-flex"
+            aria-label="Account"
+          >
             <div className="size-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-semibold">
               IA
             </div>

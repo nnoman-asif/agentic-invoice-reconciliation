@@ -60,9 +60,16 @@ export const useUIStore = create<UIState>()(
 
       addNotification: (n) =>
         set((state) => {
+          // crypto.randomUUID() is collision-free; the previous
+          // `${Date.now()}-${Math.random()...}` could (rarely) collide
+          // when notifications burst-add in the same millisecond.
+          const id =
+            typeof crypto !== "undefined" && "randomUUID" in crypto
+              ? crypto.randomUUID()
+              : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
           const next: AppNotification = {
             ...n,
-            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            id,
             timestamp: Date.now(),
             read: false,
           }

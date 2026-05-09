@@ -17,9 +17,13 @@ export function PipelinePage() {
   const { data: invoices, isLoading } = useInvoices()
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
-  // Auto-select most recent processing invoice, or most recent overall
+  // Auto-select most recent processing invoice, or most recent overall.
+  // Also recover gracefully if the previously-selected invoice has been
+  // deleted upstream -- otherwise the page would keep trying to render
+  // a stale id that no longer exists in the list.
   useEffect(() => {
-    if (selectedId || !invoices || invoices.length === 0) return
+    if (!invoices || invoices.length === 0) return
+    if (selectedId && invoices.some((i) => i.id === selectedId)) return
     const processing = invoices.find(
       (i) =>
         i.processing_status !== "completed" &&

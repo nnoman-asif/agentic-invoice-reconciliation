@@ -48,6 +48,7 @@ export function VendorBadge({ vendorId, className, variant = "inline" }: Props) 
         e.stopPropagation()
         open(vendor.id)
       }}
+      aria-label={`View vendor ${vendor.name}`}
       className={cn(
         "inline-flex items-center gap-1.5 group",
         variant === "row" ? "" : "max-w-full",

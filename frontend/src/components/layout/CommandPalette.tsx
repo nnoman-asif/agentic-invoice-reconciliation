@@ -39,16 +39,21 @@ export function CommandPalette() {
   const { data: invoices } = useInvoices()
   const [search, setSearch] = useState("")
 
+  // Bind once and always read the freshest store value imperatively.
+  // Previously the deps `[open, setOpen]` rebuilt the listener on every
+  // toggle and `setOpen(!open)` captured a stale `open`, which under
+  // StrictMode double-invocation could occasionally miss the toggle.
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if ((e.key === "k" || e.key === "K") && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
-        setOpen(!open)
+        const { commandPaletteOpen, setCommandPaletteOpen } = useUIStore.getState()
+        setCommandPaletteOpen(!commandPaletteOpen)
       }
     }
     document.addEventListener("keydown", down)
     return () => document.removeEventListener("keydown", down)
-  }, [open, setOpen])
+  }, [])
 
   // Reset search when closing
   useEffect(() => {
@@ -105,6 +110,8 @@ export function CommandPalette() {
         {invoices && invoices.length > 0 && (
           <>
             <CommandSeparator />
+            {/* "Recent" relies on the API returning rows in created_at
+                desc, which is the current contract for /api/invoices. */}
             <CommandGroup heading="Recent Invoices">
               {invoices.slice(0, 5).map((inv) => {
                 const label =

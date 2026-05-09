@@ -151,9 +151,13 @@ export function ActivityTimeline({
       <span className="absolute left-4 top-2 bottom-2 w-px bg-border" />
       {events.map((event, i) => {
         const Icon = event.icon
+        // Composite key so React doesn't accidentally reuse a list
+        // slot when events reorder or get inserted -- using just the
+        // index would cause animations to play against the wrong row.
+        const key = `${event.title}-${event.timestamp}`
         return (
           <motion.li
-            key={i}
+            key={key}
             initial={{ opacity: 0, x: -8 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: i * 0.06 }}

@@ -16,12 +16,19 @@ function parseInput(input: string | Date): Date {
 
 export function formatCurrency(amount: number | null | undefined, currency = "USD"): string {
   if (amount === null || amount === undefined) return "—"
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount)
+  // `Intl.NumberFormat` throws on invalid currency codes (e.g., a typo
+  // in seed data, or a vendor returning something we don't recognize).
+  // Fall back to the raw number rather than crashing the caller.
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount)
+  } catch {
+    return `${amount.toFixed(2)} ${currency}`
+  }
 }
 
 export function formatNumber(value: number | null | undefined, decimals = 0): string {

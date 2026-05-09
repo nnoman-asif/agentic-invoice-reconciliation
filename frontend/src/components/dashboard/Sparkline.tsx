@@ -1,3 +1,4 @@
+import { useId } from "react"
 import { motion } from "framer-motion"
 import { cn } from "@/lib/utils"
 
@@ -18,18 +19,21 @@ export function Sparkline({
   strokeWidth = 1.5,
   className,
 }: Props) {
-  if (data.length < 2) {
+  // Drop NaN / Infinity so a single bad point doesn't poison min/max
+  // and produce an invalid SVG path.
+  const cleaned = data.filter((v) => Number.isFinite(v))
+  if (cleaned.length < 2) {
     return null
   }
 
-  const min = Math.min(...data)
-  const max = Math.max(...data)
+  const min = Math.min(...cleaned)
+  const max = Math.max(...cleaned)
   const range = max - min || 1
   const padX = strokeWidth
   const padY = strokeWidth + 1
 
-  const points = data.map((value, i) => {
-    const x = padX + (i / (data.length - 1)) * (width - padX * 2)
+  const points = cleaned.map((value, i) => {
+    const x = padX + (i / (cleaned.length - 1)) * (width - padX * 2)
     const y =
       height - padY - ((value - min) / range) * (height - padY * 2)
     return [x, y] as const
@@ -46,7 +50,10 @@ export function Sparkline({
     .join(" ")
 
   const fillPath = `${path} L ${points[points.length - 1][0]} ${height} L ${points[0][0]} ${height} Z`
-  const id = `spark-${Math.random().toString(36).slice(2, 9)}`
+  // Stable per-instance id (was `Math.random()` which produced a
+  // different value every render and could collide across instances).
+  const reactId = useId()
+  const id = `spark-${reactId.replace(/:/g, "")}`
 
   return (
     <svg

@@ -56,11 +56,11 @@ export function MobileSidebar() {
   const setOpen = useMobileSidebar((s) => s.setOpen)
   const location = useLocation()
 
-  // Auto-close on navigation
+  // Auto-close on navigation. `setOpen` is stable from Zustand so
+  // it's safe (and lint-clean) to include it in deps.
   useEffect(() => {
     setOpen(false)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname])
+  }, [location.pathname, setOpen])
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>

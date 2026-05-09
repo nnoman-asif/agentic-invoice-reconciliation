@@ -42,8 +42,14 @@ const STAGES: { id: AgentStage; label: string; description: string }[] = [
   },
 ]
 
+// Maps an invoice's processing_status to the index of the stage
+// that's "running" (or -1 / -2 for special states).
+//   * queued maps to 0 so the parser node lights up "running" the
+//     moment the upload is enqueued -- previously queued mapped to
+//     -1, which left every stage idle and made it look like nothing
+//     was happening even though work was imminent.
 const STATUS_TO_INDEX: Record<ProcessingStatus, number> = {
-  queued: -1,
+  queued: 0,
   parsing: 0,
   matching: 1,
   resolving: 3, // resolution agent runs during this status
@@ -69,8 +75,11 @@ export function useLivePipeline(invoiceId: string | undefined) {
       invoice.processing_status !== "completed" &&
       invoice.processing_status !== "failed"
 
+    // Fall back to -1 for any unknown status string the backend might
+    // return so the UI doesn't render `undefined` comparisons that
+    // produce nonsense stage states.
     const currentIndex = invoice
-      ? STATUS_TO_INDEX[invoice.processing_status]
+      ? STATUS_TO_INDEX[invoice.processing_status] ?? -1
       : -1
 
     const stages: AgentStageState[] = STAGES.map((stage, idx) => {

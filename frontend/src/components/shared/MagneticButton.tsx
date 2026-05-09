@@ -7,7 +7,6 @@ interface Props {
   children: ReactNode
   className?: string
   strength?: number
-  asChild?: boolean
 }
 
 export function MagneticButton({

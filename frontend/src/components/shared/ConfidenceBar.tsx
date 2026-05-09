@@ -14,7 +14,10 @@ export function ConfidenceBar({
   size = "md",
   className,
 }: ConfidenceBarProps) {
-  const pct = Math.round((value ?? 0) * 100)
+  // Clamp to [0, 1] and guard NaN / Infinity so a bad backend value
+  // never produces a width > 100% or breaks the layout entirely.
+  const safe = Number.isFinite(value) ? Math.min(1, Math.max(0, value as number)) : 0
+  const pct = Math.round(safe * 100)
 
   const heightCls =
     size === "sm" ? "h-1" : size === "lg" ? "h-3" : "h-2"

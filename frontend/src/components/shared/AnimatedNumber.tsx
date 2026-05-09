@@ -15,11 +15,21 @@ export function AnimatedNumber({
   format,
   className,
 }: AnimatedNumberProps) {
-  const [display, setDisplay] = useState(0)
+  // Initialize from the actual value so the first paint already shows
+  // the correct number. Previously we initialized from 0 and animated
+  // up, which made formatted metrics flash "0ms" / "0.0s" briefly.
+  const [display, setDisplay] = useState(value)
   const startRef = useRef<number | null>(null)
-  const fromRef = useRef(0)
+  const fromRef = useRef(value)
+  const isFirstRun = useRef(true)
 
   useEffect(() => {
+    if (isFirstRun.current) {
+      // Skip the animation on first mount; the display already matches.
+      isFirstRun.current = false
+      fromRef.current = value
+      return
+    }
     fromRef.current = display
     startRef.current = null
     let raf: number

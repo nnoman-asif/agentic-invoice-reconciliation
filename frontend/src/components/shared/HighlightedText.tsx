@@ -19,13 +19,17 @@ export function HighlightedText({
     return <span className={className}>{text}</span>
   }
 
-  const lowerText = text.toLowerCase()
+  // Iterate by code points, not UTF-16 code units. `text.split("")`
+  // would split surrogate pairs (e.g. emoji) in half and render the
+  // halves as two replacement characters.
+  const chars = Array.from(text)
+  const lowerChars = chars.map((c) => c.toLowerCase())
   const lowerQuery = query.toLowerCase().replace(/\s+/g, "")
   const indices: number[] = []
 
   let qi = 0
-  for (let i = 0; i < lowerText.length && qi < lowerQuery.length; i++) {
-    if (lowerText[i] === lowerQuery[qi]) {
+  for (let i = 0; i < lowerChars.length && qi < lowerQuery.length; i++) {
+    if (lowerChars[i] === lowerQuery[qi]) {
       indices.push(i)
       qi++
     }
@@ -37,7 +41,7 @@ export function HighlightedText({
   const indexSet = new Set(indices)
   return (
     <span className={className}>
-      {text.split("").map((ch, i) =>
+      {chars.map((ch, i) =>
         indexSet.has(i) ? (
           <span
             key={i}

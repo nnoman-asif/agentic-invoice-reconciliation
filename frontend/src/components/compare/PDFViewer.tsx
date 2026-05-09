@@ -101,10 +101,14 @@ export function PDFViewer({ fileUrl }: Props) {
                 className="size-7"
                 disabled={page <= 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
+                aria-label="Previous page"
               >
                 <ChevronLeft className="size-4" />
               </Button>
-              <span className="text-xs font-mono tabular-nums px-2 text-muted-foreground min-w-[3rem] text-center">
+              <span
+                className="text-xs font-mono tabular-nums px-2 text-muted-foreground min-w-[3rem] text-center"
+                aria-label={`Page ${page} of ${numPages}`}
+              >
                 {page} / {numPages}
               </span>
               <Button
@@ -113,6 +117,7 @@ export function PDFViewer({ fileUrl }: Props) {
                 className="size-7"
                 disabled={page >= numPages}
                 onClick={() => setPage((p) => Math.min(numPages, p + 1))}
+                aria-label="Next page"
               >
                 <ChevronRight className="size-4" />
               </Button>
@@ -130,13 +135,17 @@ export function PDFViewer({ fileUrl }: Props) {
                 className="size-7"
                 onClick={zoomOut}
                 disabled={scale <= MIN_ZOOM}
+                aria-label="Zoom out"
               >
                 <ZoomOut className="size-4" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>Zoom out</TooltipContent>
           </Tooltip>
-          <span className="text-xs font-mono tabular-nums px-1 text-muted-foreground min-w-[3rem] text-center">
+          <span
+            className="text-xs font-mono tabular-nums px-1 text-muted-foreground min-w-[3rem] text-center"
+            aria-label={`Zoom level ${Math.round(scale * 100)} percent`}
+          >
             {Math.round(scale * 100)}%
           </span>
           <Tooltip delayDuration={300}>
@@ -147,6 +156,7 @@ export function PDFViewer({ fileUrl }: Props) {
                 className="size-7"
                 onClick={zoomIn}
                 disabled={scale >= MAX_ZOOM}
+                aria-label="Zoom in"
               >
                 <ZoomIn className="size-4" />
               </Button>
@@ -164,6 +174,7 @@ export function PDFViewer({ fileUrl }: Props) {
                 size="icon"
                 className="size-7"
                 onClick={rotate}
+                aria-label="Rotate 90 degrees"
               >
                 <RotateCw className="size-4" />
               </Button>
@@ -180,6 +191,7 @@ export function PDFViewer({ fileUrl }: Props) {
                   size="icon"
                   className="size-7"
                   onClick={reset}
+                  aria-label="Reset zoom, rotation, and page"
                 >
                   <RefreshCcw className="size-4" />
                 </Button>

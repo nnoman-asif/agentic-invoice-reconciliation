@@ -52,8 +52,10 @@ export function FlowPage() {
           <>
             <FlowScene invoices={invoices} />
 
-            {/* Gradient overlay at bottom for legend */}
-            <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-slate-950 to-transparent pointer-events-none" />
+            {/* Gradient overlay at bottom for legend -- uses the
+                theme-aware background token so it works in light mode
+                instead of slamming a hard slate-950. */}
+            <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-background to-transparent pointer-events-none" />
 
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 px-4 py-2 rounded-full glass-strong">
               <Legend color="#10b981" label="Approved" />

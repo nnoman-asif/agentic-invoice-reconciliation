@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import {
   AlertTriangle,
   CheckCircle2,
+  CircleDashed,
   XCircle,
   ArrowRight,
   X,
@@ -242,16 +243,21 @@ export function ExceptionsPage() {
         actions={
           invoices && invoices.length > 0 ? (
             <div className="flex items-center gap-2">
+              {/* Plain Button -- previously this nested a <Checkbox>
+                  inside a <button>, which is invalid HTML and confusing
+                  for assistive tech. The check icon is now decorative. */}
               <Button
                 variant="outline"
                 size="sm"
                 onClick={toggleAll}
                 className="gap-2"
+                aria-pressed={allSelected}
               >
-                <Checkbox
-                  checked={allSelected}
-                  onCheckedChange={() => toggleAll()}
-                />
+                {allSelected ? (
+                  <CheckCircle2 className="size-4" />
+                ) : (
+                  <CircleDashed className="size-4" />
+                )}
                 {allSelected ? "Deselect all" : "Select all"}
               </Button>
               <ExportButton
