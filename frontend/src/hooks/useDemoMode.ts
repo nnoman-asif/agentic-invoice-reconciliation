@@ -10,7 +10,8 @@ const SAMPLE_FILES = [
 ] as const
 
 interface UseDemoModeReturn {
-  runDemo: () => Promise<void>
+  /** Returns true if at least one sample uploaded successfully. */
+  runDemo: () => Promise<boolean>
   isRunning: boolean
 }
 
@@ -23,8 +24,8 @@ export function useDemoMode(): UseDemoModeReturn {
   const upload = useUploadInvoice()
   const [isRunning, setIsRunning] = useState(false)
 
-  const runDemo = async () => {
-    if (isRunning) return
+  const runDemo = async (): Promise<boolean> => {
+    if (isRunning) return false
     setIsRunning(true)
 
     const toastId = toast.loading("Running demo...", {
@@ -48,9 +49,11 @@ export function useDemoMode(): UseDemoModeReturn {
         id: toastId,
         description: `${succeeded} invoices uploaded. Watch them process in the inbox or pipeline view.`,
       })
+      return true
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : "Demo failed"
       toast.error("Demo failed", { id: toastId, description: message })
+      return false
     } finally {
       setIsRunning(false)
     }

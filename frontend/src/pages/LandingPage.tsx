@@ -58,8 +58,10 @@ export function LandingPage() {
   const { runDemo, isRunning } = useDemoMode()
 
   const handleDemo = async () => {
-    await runDemo()
-    navigate(ROUTES.inbox)
+    const success = await runDemo()
+    // Only whisk the user away on success; on failure they stay on
+    // the landing page where the error toast is visible.
+    if (success) navigate(ROUTES.inbox)
   }
 
   return (

@@ -71,6 +71,8 @@ export function ExceptionsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   // Map invoice_id -> reconciliation_id (collected as cards mount)
   const [reconMap, setReconMap] = useState<Record<string, string>>({})
+  // Inline error inside the bulk dialog when every action failed
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   const approveMut = useApproveException()
   const rejectMut = useRejectException()
@@ -103,18 +105,37 @@ export function ExceptionsPage() {
   const closeDialog = () => {
     setDialog({ open: false })
     setNotes("")
+    setSubmitError(null)
   }
 
-  const openSingle = (type: ActionType, reconciliationId: string) =>
+  const openSingle = (type: ActionType, reconciliationId: string) => {
+    setSubmitError(null)
     setDialog({ open: true, type, reconciliationId })
+  }
+
+  // How many of the currently selected invoices have their recon
+  // resolved -- used to gate bulk submit until all are ready, so we
+  // never silently drop selections (bug H3).
+  const selectedReadyCount = selectedReconciliationIds.length
+  const bulkReady =
+    selected.size > 0 && selectedReadyCount === selected.size
 
   const openBulk = (type: ActionType) => {
-    if (selectedReconciliationIds.length === 0) {
+    if (selected.size === 0) {
       toast.warning("Nothing selected", {
         description: "Pick one or more invoices first.",
       })
       return
     }
+    if (!bulkReady) {
+      toast.info("Hang on...", {
+        description: `Loading details for ${selected.size - selectedReadyCount} more selection${
+          selected.size - selectedReadyCount === 1 ? "" : "s"
+        }.`,
+      })
+      return
+    }
+    setSubmitError(null)
     setDialog({
       open: true,
       type,
@@ -127,17 +148,28 @@ export function ExceptionsPage() {
     const ids = dialog.reconciliationIds ?? (dialog.reconciliationId ? [dialog.reconciliationId] : [])
     if (ids.length === 0) return
 
-    const body = { reviewer_notes: notes || null, decided_by: decidedBy || null }
+    const trimmedReviewer = decidedBy.trim()
+    if (!trimmedReviewer) {
+      setSubmitError("Reviewer name is required.")
+      return
+    }
+
+    const body = {
+      reviewer_notes: notes.trim() || null,
+      decided_by: trimmedReviewer,
+    }
     const mut = dialog.type === "approve" ? approveMut : rejectMut
 
     let succeeded = 0
     let failed = 0
+    let lastErrorMessage: string | null = null
     for (const reconciliationId of ids) {
       try {
         await mut.mutateAsync({ reconciliationId, body })
         succeeded++
-      } catch {
+      } catch (e: unknown) {
         failed++
+        if (e instanceof Error) lastErrorMessage = e.message
       }
     }
 
@@ -148,6 +180,23 @@ export function ExceptionsPage() {
           : `${succeeded} of ${ids.length} ${dialog.type === "approve" ? "approved" : "rejected"}`
       )
     }
+
+    // If EVERY action failed, keep selection + dialog open so the user
+    // can inspect the error and retry without re-doing the whole
+    // selection (bug H4). Partial failure still closes since the
+    // remaining items are no longer in pending_review state.
+    if (failed > 0 && succeeded === 0) {
+      setSubmitError(
+        lastErrorMessage ??
+          `Could not ${dialog.type} ${failed === 1 ? "this exception" : `any of the ${failed} exceptions`}.`
+      )
+      toast.error(
+        `${dialog.type === "approve" ? "Approve" : "Reject"} failed`,
+        { description: "See the dialog for details." }
+      )
+      return
+    }
+
     if (failed > 0) {
       toast.error(`${failed} action${failed === 1 ? "" : "s"} failed`)
     }
@@ -232,6 +281,11 @@ export function ExceptionsPage() {
                 </span>
                 <span className="text-sm font-medium">
                   {selected.size} invoice{selected.size === 1 ? "" : "s"} selected
+                  {!bulkReady && (
+                    <span className="ml-2 text-xs text-muted-foreground font-normal">
+                      ({selectedReadyCount} of {selected.size} ready)
+                    </span>
+                  )}
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -247,11 +301,26 @@ export function ExceptionsPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => openBulk("reject")}
+                  disabled={!bulkReady}
+                  title={
+                    !bulkReady
+                      ? "Waiting for selection details to load"
+                      : undefined
+                  }
                 >
                   <XCircle className="size-4" />
                   Reject all
                 </Button>
-                <Button size="sm" onClick={() => openBulk("approve")}>
+                <Button
+                  size="sm"
+                  onClick={() => openBulk("approve")}
+                  disabled={!bulkReady}
+                  title={
+                    !bulkReady
+                      ? "Waiting for selection details to load"
+                      : undefined
+                  }
+                >
                   <CheckCircle2 className="size-4" />
                   Approve all
                 </Button>
@@ -309,12 +378,15 @@ export function ExceptionsPage() {
 
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label htmlFor="decided-by">Reviewer</Label>
+              <Label htmlFor="decided-by">
+                Reviewer <span className="text-destructive">*</span>
+              </Label>
               <Input
                 id="decided-by"
                 placeholder="your name"
                 value={decidedBy}
                 onChange={(e) => setDecidedBy(e.target.value)}
+                required
               />
             </div>
             <div className="space-y-2">
@@ -331,6 +403,14 @@ export function ExceptionsPage() {
                 rows={4}
               />
             </div>
+            {submitError && (
+              <div
+                role="alert"
+                className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              >
+                {submitError}
+              </div>
+            )}
           </div>
 
           <DialogFooter>

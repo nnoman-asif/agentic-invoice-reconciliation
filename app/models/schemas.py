@@ -1,8 +1,9 @@
 import uuid
 from datetime import date, datetime
 from enum import Enum
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ── Enums ──────────────────────────────────────────────────────────
@@ -320,8 +321,39 @@ class ReconciliationResponse(BaseModel):
 # ── Human Review Request ──────────────────────────────────────────
 
 class ReviewRequest(BaseModel):
+    """Body for /exceptions/{id}/approve and /exceptions/{id}/reject.
+
+    `decided_by` is required so every human review has a real
+    accountable reviewer recorded for audit / RAG learning.
+    """
     reviewer_notes: str | None = None
-    decided_by: str | None = None
+    decided_by: str = Field(min_length=1)
+
+    @field_validator("decided_by")
+    @classmethod
+    def _strip_decided_by(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("decided_by must not be empty")
+        return v
+
+
+class OverrideRequest(BaseModel):
+    """Body for /exceptions/{id}/override -- used to flip a previously
+    auto-approved reconciliation to approved or rejected with a
+    mandatory human reason.
+    """
+    decision: Literal["approved", "rejected"]
+    reviewer_notes: str = Field(min_length=1)
+    decided_by: str = Field(min_length=1)
+
+    @field_validator("reviewer_notes", "decided_by")
+    @classmethod
+    def _not_blank(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("must not be empty")
+        return v
 
 
 # ── Dashboard ─────────────────────────────────────────────────────

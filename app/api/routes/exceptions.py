@@ -11,6 +11,7 @@ from app.db.session import get_db
 from app.models.database import HumanReview, Invoice, Reconciliation
 from app.models.schemas import (
     InvoiceListResponse,
+    OverrideRequest,
     ReconciliationResponse,
     ReviewRequest,
     HumanReviewResponse,
@@ -121,6 +122,58 @@ async def reject_exception(
     inv_result = await db.execute(inv_stmt)
     invoice = inv_result.scalar_one()
     invoice.business_status = "rejected"
+    invoice.updated_at = datetime.now(timezone.utc)
+
+    await db.flush()
+    await db.refresh(review)
+    await _index_safely(db, reconciliation_id)
+    return review
+
+
+@router.post(
+    "/exceptions/{reconciliation_id}/override",
+    response_model=HumanReviewResponse,
+)
+async def override_exception(
+    reconciliation_id: uuid.UUID,
+    body: OverrideRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Flip a previously auto-approved reconciliation to approved or
+    rejected, with a mandatory reason. Use this when the agent
+    auto-approved an invoice that on second look needs human
+    intervention. (The standard approve/reject endpoints reject
+    auto-approved recons by design.)
+    """
+    stmt = select(Reconciliation).where(Reconciliation.id == reconciliation_id)
+    result = await db.execute(stmt)
+    recon = result.scalar_one_or_none()
+    if not recon:
+        raise HTTPException(status_code=404, detail="Reconciliation not found")
+    if recon.overall_status != "auto_approved":
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Override is only allowed on auto_approved reconciliations "
+                f"(this one is '{recon.overall_status}'). Use approve or reject instead."
+            ),
+        )
+
+    review = HumanReview(
+        reconciliation_id=reconciliation_id,
+        decision=body.decision,
+        reviewer_notes=body.reviewer_notes,
+        decided_by=body.decided_by,
+    )
+    db.add(review)
+
+    recon.overall_status = body.decision
+    recon.updated_at = datetime.now(timezone.utc)
+
+    inv_stmt = select(Invoice).where(Invoice.id == recon.invoice_id)
+    inv_result = await db.execute(inv_stmt)
+    invoice = inv_result.scalar_one()
+    invoice.business_status = body.decision
     invoice.updated_at = datetime.now(timezone.utc)
 
     await db.flush()

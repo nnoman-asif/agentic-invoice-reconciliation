@@ -52,14 +52,20 @@ export function InvoiceDetailPage() {
   } = useInvoice(id)
   const { data: recon } = useInvoiceReconciliation(id)
 
-  // Trigger confetti once when an auto-approved reconciliation appears
-  const celebratedRef = useRef<string | null>(null)
+  // Trigger confetti once per approved invoice (auto OR manual). Track
+  // a Set of celebrated ids in a ref so revisiting an already-celebrated
+  // invoice in the same session does NOT re-fire (bug H6) and so manual
+  // approvals also celebrate (bug M3).
+  const celebratedRef = useRef<Set<string>>(new Set())
   const successBadgeRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!recon || !id) return
-    if (recon.overall_status !== "auto_approved") return
-    if (celebratedRef.current === id) return
-    celebratedRef.current = id
+    const celebratory =
+      recon.overall_status === "auto_approved" ||
+      recon.overall_status === "approved"
+    if (!celebratory) return
+    if (celebratedRef.current.has(id)) return
+    celebratedRef.current.add(id)
     // small delay so the badge is mounted and visible
     const t = window.setTimeout(() => {
       celebrateFromElement(successBadgeRef.current)
