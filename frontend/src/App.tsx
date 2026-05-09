@@ -1,5 +1,5 @@
 import { useMemo } from "react"
-import { Routes, Route, useNavigate } from "react-router-dom"
+import { Routes, Route, useLocation, useNavigate } from "react-router-dom"
 import { AnimatePresence } from "framer-motion"
 
 import { AppShell } from "@/components/layout/AppShell"
@@ -33,38 +33,48 @@ export default function App() {
   useInvoiceNotifications() // global cross-page notification dispatcher
   useGlobalShortcuts()
 
+  const location = useLocation()
+
+  // Two layers of error containment:
+  //   * The outer boundary in main.tsx catches catastrophic provider /
+  //     bootstrap errors -- it persists across navigation.
+  //   * This inner boundary is keyed by route path so a page-level crash
+  //     resets the moment the user navigates somewhere else, instead of
+  //     leaving them stuck on the fallback screen forever.
   return (
-    <ErrorBoundary>
+    <>
       <PageLoadingBar />
       <CommandPalette />
       <ShortcutsOverlay />
       <VendorSheet />
       <AnimatePresence mode="wait">
-        <Routes>
-          <Route path={ROUTES.landing} element={<LandingPage />} />
+        <ErrorBoundary key={location.pathname}>
+          <Routes location={location}>
+            <Route path={ROUTES.landing} element={<LandingPage />} />
 
-          <Route element={<AppShell />}>
-            <Route path={ROUTES.dashboard} element={<DashboardPage />} />
-            <Route path={ROUTES.inbox} element={<InboxPage />} />
-            <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
-            <Route
-              path="/invoices/:id/compare"
-              element={<CompareViewPage />}
-            />
-            <Route path={ROUTES.pipeline} element={<PipelinePage />} />
-            <Route path={ROUTES.flow} element={<FlowPage />} />
-            <Route path={ROUTES.exceptions} element={<ExceptionsPage />} />
-            <Route
-              path={ROUTES.purchaseOrders}
-              element={<PurchaseOrdersPage />}
-            />
-            <Route path={ROUTES.settings} element={<SettingsPage />} />
-          </Route>
+            <Route element={<AppShell />}>
+              <Route path={ROUTES.dashboard} element={<DashboardPage />} />
+              <Route path={ROUTES.inbox} element={<InboxPage />} />
+              <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
+              <Route
+                path="/invoices/:id/compare"
+                element={<CompareViewPage />}
+              />
+              <Route path={ROUTES.pipeline} element={<PipelinePage />} />
+              <Route path={ROUTES.flow} element={<FlowPage />} />
+              <Route path={ROUTES.exceptions} element={<ExceptionsPage />} />
+              <Route
+                path={ROUTES.purchaseOrders}
+                element={<PurchaseOrdersPage />}
+              />
+              <Route path={ROUTES.settings} element={<SettingsPage />} />
+            </Route>
 
-          <Route path="*" element={<NotFoundPage />} />
-        </Routes>
+            <Route path="*" element={<NotFoundPage />} />
+          </Routes>
+        </ErrorBoundary>
       </AnimatePresence>
-    </ErrorBoundary>
+    </>
   )
 }
 

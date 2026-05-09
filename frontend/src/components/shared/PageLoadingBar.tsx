@@ -12,7 +12,10 @@ export function PageLoadingBar() {
   return (
     <div
       aria-hidden="true"
-      className="fixed top-0 left-0 right-0 z-[60] pointer-events-none h-0.5"
+      // z-40 keeps the bar above page content but below modals/sheets
+      // (Radix Dialog defaults to z-50). Previously z-[60] painted the
+      // bar over open dialogs, which looked broken.
+      className="fixed top-0 left-0 right-0 z-40 pointer-events-none h-0.5"
     >
       <AnimatePresence>
         {loading && (

@@ -36,8 +36,11 @@ export function LiveStats() {
   const { data: stats } = useDashboardStats()
 
   const totalInvoices = stats?.total_invoices ?? 0
-  const approved = stats?.by_business_status.approved ?? 0
-  const pendingReview = stats?.by_business_status.pending_review ?? 0
+  // Full optional chaining: `stats?.by_business_status.approved` would
+  // try to read `.approved` on `undefined` while loading and throw at
+  // first render before data arrives.
+  const approved = stats?.by_business_status?.approved ?? 0
+  const pendingReview = stats?.by_business_status?.pending_review ?? 0
   const totalDiscrepancies = Object.values(
     stats?.top_discrepancy_types ?? {}
   ).reduce((a, b) => a + b, 0)

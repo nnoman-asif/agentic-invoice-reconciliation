@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   Clock,
   XCircle,
+  RefreshCcw,
 } from "lucide-react"
 
 import { PageSkeleton } from "@/components/shared/LoadingSkeleton"
@@ -42,7 +43,13 @@ import { cn } from "@/lib/utils"
 
 export function InvoiceDetailPage() {
   const { id } = useParams<{ id: string }>()
-  const { data: invoice, isLoading } = useInvoice(id)
+  const {
+    data: invoice,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useInvoice(id)
   const { data: recon } = useInvoiceReconciliation(id)
 
   // Trigger confetti once when an auto-approved reconciliation appears
@@ -60,8 +67,36 @@ export function InvoiceDetailPage() {
     return () => window.clearTimeout(t)
   }, [recon, id])
 
-  if (isLoading || !invoice) {
+  if (isLoading) {
     return <PageSkeleton />
+  }
+
+  if (isError || !invoice) {
+    const message =
+      error instanceof Error ? error.message : "Could not load this invoice"
+    return (
+      <div className="space-y-6">
+        <Link to={ROUTES.inbox}>
+          <Button variant="ghost" size="sm" className="-ml-3 text-muted-foreground">
+            <ArrowLeft className="size-4" />
+            Back to inbox
+          </Button>
+        </Link>
+        <Card>
+          <EmptyState
+            illustration={<NoData className="w-full" />}
+            title="Invoice not available"
+            description={message}
+            action={
+              <Button variant="outline" onClick={() => refetch()}>
+                <RefreshCcw className="size-4" />
+                Try again
+              </Button>
+            }
+          />
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -111,7 +146,7 @@ export function InvoiceDetailPage() {
                     {formatDate(invoice.invoice_date)}
                   </span>
                 )}
-                {invoice.total_amount && (
+                {invoice.total_amount != null && (
                   <span className="font-mono font-medium tabular-nums text-foreground">
                     {formatCurrency(invoice.total_amount, invoice.currency)}
                   </span>
@@ -183,7 +218,7 @@ export function InvoiceDetailPage() {
                   {recon.overall_status === "pending_review" && (
                     <AlertTriangle className="size-3" />
                   )}
-                  {recon.overall_status.replace("_", " ")}
+                  {recon.overall_status.replace(/_/g, " ")}
                 </Badge>
               </div>
             </CardHeader>
@@ -195,7 +230,7 @@ export function InvoiceDetailPage() {
               )}
               <ConfidenceBar value={recon.confidence_score} size="lg" />
               <div className="grid grid-cols-3 gap-3 pt-2 text-xs">
-                <Stat label="Match type" value={recon.match_type.replace("_", " ")} />
+                <Stat label="Match type" value={recon.match_type.replace(/_/g, " ")} />
                 <Stat
                   label="Processing time"
                   value={formatDuration(recon.processing_time_ms)}

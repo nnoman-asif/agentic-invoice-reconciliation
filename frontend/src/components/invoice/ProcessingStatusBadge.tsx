@@ -7,26 +7,33 @@ import {
   Brain,
   CheckCircle2,
   XCircle,
+  HelpCircle,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import type { ProcessingStatus } from "@/api/types"
 import { cn } from "@/lib/utils"
 
-const CONFIG: Record<
-  ProcessingStatus,
-  {
-    label: string
-    icon: React.ComponentType<{ className?: string }>
-    variant: "default" | "secondary" | "success" | "destructive" | "warning" | "muted"
-    spinning?: boolean
-  }
-> = {
+type Config = {
+  label: string
+  icon: React.ComponentType<{ className?: string }>
+  variant: "default" | "secondary" | "success" | "destructive" | "warning" | "muted"
+  spinning?: boolean
+}
+
+const CONFIG: Record<ProcessingStatus, Config> = {
   queued: { label: "Queued", icon: Clock, variant: "muted" },
   parsing: { label: "Parsing", icon: Search, variant: "default", spinning: true },
   matching: { label: "Matching", icon: Layers, variant: "default", spinning: true },
   resolving: { label: "Resolving", icon: Brain, variant: "default", spinning: true },
   completed: { label: "Completed", icon: CheckCircle2, variant: "success" },
   failed: { label: "Failed", icon: XCircle, variant: "destructive" },
+}
+
+// Backend uses `str` columns (not enums) so the API can technically
+// return any value. Falling back to a neutral badge keeps the UI alive
+// instead of throwing `Cannot read properties of undefined`.
+function getConfig(status: ProcessingStatus): Config {
+  return CONFIG[status] ?? { label: status, icon: HelpCircle, variant: "muted" }
 }
 
 export function ProcessingStatusBadge({
@@ -36,7 +43,7 @@ export function ProcessingStatusBadge({
   status: ProcessingStatus
   className?: string
 }) {
-  const config = CONFIG[status]
+  const config = getConfig(status)
   const Icon = config.icon
 
   const isActive = config.spinning
