@@ -44,7 +44,7 @@ async def get_dashboard_stats(db: AsyncSession = Depends(get_db)):
     avg_result = await db.execute(avg_stmt)
     avg_time = avg_result.scalar()
 
-    # Top discrepancy types
+    # Top discrepancy types (capped for chart rendering)
     disc_stmt = (
         select(Discrepancy.type, func.count(Discrepancy.id))
         .group_by(Discrepancy.type)
@@ -54,6 +54,12 @@ async def get_dashboard_stats(db: AsyncSession = Depends(get_db)):
     disc_result = await db.execute(disc_stmt)
     top_discrepancies = {row[0]: row[1] for row in disc_result.all()}
 
+    # Total across ALL discrepancy rows (not just the top-10 types).
+    # Without this, a UI displaying `sum(top_discrepancy_types.values())`
+    # would silently undercount whenever there are more than 10 types.
+    total_disc_q = await db.execute(select(func.count(Discrepancy.id)))
+    total_discrepancies = total_disc_q.scalar() or 0
+
     return DashboardStats(
         total_invoices=total_invoices,
         by_processing_status=by_processing,
@@ -62,4 +68,5 @@ async def get_dashboard_stats(db: AsyncSession = Depends(get_db)):
         match_rate=match_rate,
         avg_processing_time_ms=avg_time,
         top_discrepancy_types=top_discrepancies,
+        total_discrepancies=total_discrepancies,
     )

@@ -192,7 +192,10 @@ export interface DashboardStats {
   total_reconciliations: number
   match_rate: Record<string, number>
   avg_processing_time_ms: number | null
+  /** Top-10 discrepancy types by count, for the chart. */
   top_discrepancy_types: Record<string, number>
+  /** Sum across all discrepancy rows -- use this when displaying a total. */
+  total_discrepancies: number
 }
 
 export interface HealthResponse {

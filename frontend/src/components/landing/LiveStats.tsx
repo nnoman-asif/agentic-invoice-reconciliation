@@ -41,14 +41,16 @@ export function LiveStats() {
   // first render before data arrives.
   const approved = stats?.by_business_status?.approved ?? 0
   const pendingReview = stats?.by_business_status?.pending_review ?? 0
-  const totalDiscrepancies = Object.values(
-    stats?.top_discrepancy_types ?? {}
-  ).reduce((a, b) => a + b, 0)
+  // Use the dedicated total field rather than summing the top-10 types,
+  // which would silently undercount when there are >10 distinct types.
+  const totalDiscrepancies = stats?.total_discrepancies ?? 0
   const avgMs = stats?.avg_processing_time_ms ?? 0
 
   const blocks: StatBlock[] = [
     { label: "Invoices reconciled", value: totalInvoices, icon: FileText, accent: "blue" },
-    { label: "Auto-approvals", value: approved, icon: CheckCircle2, accent: "emerald" },
+    // "Approved" rather than "Auto-approvals" because this count
+    // includes manually approved invoices too, not just auto-approvals.
+    { label: "Approved", value: approved, icon: CheckCircle2, accent: "emerald" },
     { label: "Discrepancies caught", value: totalDiscrepancies, icon: AlertTriangle, accent: "amber" },
     { label: "Avg processing", value: avgMs, icon: Clock, accent: "purple", format: formatMs },
   ]
@@ -78,9 +80,9 @@ export function LiveStats() {
             </div>
             <div className="relative text-3xl sm:text-4xl font-bold tracking-tight tabular-nums">
               <AnimatedNumber value={b.value} format={b.format} />
-              {pendingReview > 0 && b.label === "Auto-approvals" && (
+              {pendingReview > 0 && b.label === "Approved" && (
                 <span className="ml-2 text-xs sm:text-sm font-medium text-muted-foreground/70">
-                  · {pendingReview} reviewed
+                  · {pendingReview} pending review
                 </span>
               )}
             </div>

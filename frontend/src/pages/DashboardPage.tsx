@@ -19,13 +19,13 @@ export function DashboardPage() {
     return <PageSkeleton />
   }
 
-  const approved = stats.by_business_status.approved ?? 0
-  const pendingReview = stats.by_business_status.pending_review ?? 0
-  const completed = stats.by_processing_status.completed ?? 0
-  const totalDiscrepancies = Object.values(stats.top_discrepancy_types).reduce(
-    (a, b) => a + b,
-    0
-  )
+  const approved = stats.by_business_status?.approved ?? 0
+  const pendingReview = stats.by_business_status?.pending_review ?? 0
+  const completed = stats.by_processing_status?.completed ?? 0
+  // True total across every discrepancy row, not just the top-10 types
+  // surfaced in the chart -- otherwise the summary number could lie
+  // when there are more than 10 distinct discrepancy types.
+  const totalDiscrepancies = stats.total_discrepancies
 
   return (
     <div className="space-y-8">
@@ -47,7 +47,10 @@ export function DashboardPage() {
           index={0}
         />
         <StatCard
-          label="Auto-Approved"
+          // "Approved" rather than "Auto-Approved" -- this count
+          // includes manually approved invoices too, not just the
+          // ones the agent auto-approved.
+          label="Approved"
           value={approved}
           icon={CheckCircle2}
           accent="emerald"

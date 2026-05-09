@@ -31,6 +31,16 @@ interface Trends {
   completed: number[]
 }
 
+/**
+ * Returns 7 daily counts per series for the dashboard sparklines.
+ *
+ * Semantics: invoices are bucketed by their **created_at** date in
+ * **local time**, and tagged with their **current** status. So
+ * `approved[3]` means "invoices uploaded that day that are in
+ * approved state right now" -- not "invoices that became approved
+ * that day". Status-change-date history isn't currently captured by
+ * the API, so this is the most accurate version available.
+ */
 export function useDailyTrends(): Trends {
   const { data: invoices } = useInvoices()
   return useMemo(() => {

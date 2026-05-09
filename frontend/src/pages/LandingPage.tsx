@@ -12,6 +12,7 @@ import {
   type FeatureVariant,
 } from "@/components/landing/FeatureMiniDiagram"
 import { useDemoMode } from "@/hooks/useDemoMode"
+import { GITHUB_URL } from "@/lib/config"
 import { ROUTES } from "@/lib/routes"
 
 interface Feature {
@@ -80,7 +81,7 @@ export function LandingPage() {
           </div>
           <nav className="flex items-center gap-4">
             <a
-              href="https://github.com/nnoman-asif/agentic-invoice-reconciliation"
+              href={GITHUB_URL}
               target="_blank"
               rel="noopener noreferrer"
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"

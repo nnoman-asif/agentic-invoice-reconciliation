@@ -365,7 +365,13 @@ class DashboardStats(BaseModel):
     total_reconciliations: int
     match_rate: dict[str, int]
     avg_processing_time_ms: float | None
+    # Top-10 discrepancy types by count (capped for chart rendering).
     top_discrepancy_types: dict[str, int]
+    # Sum across ALL discrepancy rows in the system, not just the top
+    # 10 surfaced above. Use this when displaying a "total discrepancies"
+    # number to the user, so the count doesn't silently undercount when
+    # there are more than 10 distinct types.
+    total_discrepancies: int
 
 
 # ── Health ────────────────────────────────────────────────────────

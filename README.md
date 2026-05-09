@@ -253,12 +253,23 @@ curl http://localhost:8000/health
 
 ### Webhook
 
+`POST /api/webhooks/invoice-received` re-queues an existing invoice for
+processing. Use it when:
+
+- An ERP / upstream system has dropped a row directly into the
+  `invoices` table and you want the agent pipeline to pick it up.
+- An invoice ended up stuck in `queued` (e.g., the worker was down
+  when the upload happened) or `failed` and you want to retry it.
+
 ```bash
-# Trigger processing for an existing invoice
 curl -X POST http://localhost:8000/api/webhooks/invoice-received \
   -H "Content-Type: application/json" \
-  -d '{"invoice_id": "..."}'
+  -d '{"invoice_id": "<uuid>"}'
 ```
+
+Returns `200 {"status": "queued", "invoice_id": "..."}` on success,
+`409` if the invoice is already `parsing`/`matching`/`resolving`/`completed`,
+`400` for a bad UUID, or `404` if the id is unknown.
 
 Interactive API docs available at **http://localhost:8000/docs** (Swagger UI).
 
