@@ -128,7 +128,7 @@ export function AgentInternals({ stage }: Props) {
               status={stage.status}
               hasData={!!stage.output}
               content={JSON.stringify(getStageInputShape(stage.id), null, 2)}
-              runningHint="The agent is processing right now — input is being consumed."
+              runningHint="The agent is processing right now - input is being consumed."
               completedHint="See live data in the pipeline state above. Schema:"
             />
           </TabsContent>
@@ -141,7 +141,7 @@ export function AgentInternals({ stage }: Props) {
               content={
                 stage.output ? JSON.stringify(stage.output, null, 2) : ""
               }
-              runningHint="Agent is still executing — output will appear once this stage completes."
+              runningHint="Agent is still executing - output will appear once this stage completes."
               completedHint="Output captured from the last run:"
             />
           </TabsContent>
