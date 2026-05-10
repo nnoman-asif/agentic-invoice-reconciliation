@@ -21,9 +21,9 @@ Production-grade React + TypeScript UI for the Invoice Reconciliation Agent back
 2. `/dashboard` — Stats, charts, activity feed
 3. `/invoices` — Inbox with drag-drop upload + live status
 4. `/invoices/:id` — Reconciliation detail with tabs
-5. `/invoices/:id/compare` — Side-by-side PDF + matched data **(Wow #2)**
-6. `/pipeline` — Live agent pipeline visualizer **(Wow #1)**
-7. `/flow` — 3D Three.js scene **(Wow #3)**
+5. `/invoices/:id/compare` — Side-by-side PDF + matched data
+6. `/pipeline` — Live agent pipeline visualizer
+7. `/flow` — 3D Three.js scene
 8. `/exceptions` — Pending review with approve/reject
 9. `/purchase-orders` — Searchable PO table with detail sheet, CSV import/export, and add/edit/delete
 10. `/vendors` — Vendor table with detail sheet, CSV import/export, and add/edit/delete
