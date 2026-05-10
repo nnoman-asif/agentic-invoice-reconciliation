@@ -3,7 +3,9 @@ import io
 import uuid
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from sqlalchemy import delete as sql_delete
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -18,7 +20,9 @@ from app.models.schemas import (
     ImportRowResult,
     InvoiceListResponse,
     PurchaseOrderListResponse,
+    VendorCreate,
     VendorResponse,
+    VendorUpdate,
 )
 
 router = APIRouter()
@@ -32,6 +36,137 @@ async def list_vendors(db: AsyncSession = Depends(get_db)):
     stmt = select(Vendor).order_by(Vendor.name)
     result = await db.execute(stmt)
     return result.scalars().all()
+
+
+@router.post("/vendors", response_model=VendorResponse, status_code=201)
+async def create_vendor(
+    data: VendorCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    code_q = await db.execute(select(Vendor.id).where(Vendor.code == data.code))
+    if code_q.scalar_one_or_none():
+        raise HTTPException(
+            status_code=409, detail=f"code {data.code!r} already exists"
+        )
+    if data.tax_id:
+        tax_q = await db.execute(
+            select(Vendor.id).where(Vendor.tax_id == data.tax_id)
+        )
+        if tax_q.scalar_one_or_none():
+            raise HTTPException(
+                status_code=409,
+                detail=f"tax_id {data.tax_id!r} already exists",
+            )
+
+    vendor = Vendor(
+        code=data.code,
+        name=data.name,
+        tax_id=data.tax_id,
+        address=data.address,
+        contact_email=data.contact_email,
+    )
+    db.add(vendor)
+    await db.flush()
+    return vendor
+
+
+@router.put("/vendors/{vendor_id}", response_model=VendorResponse)
+async def update_vendor(
+    vendor_id: uuid.UUID,
+    data: VendorUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    vendor = await db.get(Vendor, vendor_id)
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+
+    if data.code is not None and data.code != vendor.code:
+        code_q = await db.execute(
+            select(Vendor.id).where(
+                Vendor.code == data.code, Vendor.id != vendor_id
+            )
+        )
+        if code_q.scalar_one_or_none():
+            raise HTTPException(
+                status_code=409, detail=f"code {data.code!r} already exists"
+            )
+        vendor.code = data.code
+
+    if data.tax_id is not None and data.tax_id != vendor.tax_id:
+        if data.tax_id:  # only check uniqueness for non-empty values
+            tax_q = await db.execute(
+                select(Vendor.id).where(
+                    Vendor.tax_id == data.tax_id, Vendor.id != vendor_id
+                )
+            )
+            if tax_q.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"tax_id {data.tax_id!r} already exists",
+                )
+        vendor.tax_id = data.tax_id or None
+
+    if data.name is not None:
+        vendor.name = data.name
+    if data.address is not None:
+        vendor.address = data.address or None
+    if data.contact_email is not None:
+        vendor.contact_email = data.contact_email or None
+
+    await db.flush()
+    return vendor
+
+
+@router.delete("/vendors/{vendor_id}", status_code=204)
+async def delete_vendor(
+    vendor_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a vendor.
+
+    Both `purchase_orders.vendor_id` and `invoices.vendor_id` are
+    `ON DELETE RESTRICT`, so the DB will refuse if either side is
+    populated. We pre-check for a friendlier 409 response with
+    counts; the IntegrityError catch is a safety net for races.
+    """
+    vendor_q = await db.execute(select(Vendor.id).where(Vendor.id == vendor_id))
+    if not vendor_q.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Vendor not found")
+
+    po_count_q = await db.execute(
+        select(func.count(PurchaseOrder.id)).where(
+            PurchaseOrder.vendor_id == vendor_id
+        )
+    )
+    po_count = int(po_count_q.scalar() or 0)
+    inv_count_q = await db.execute(
+        select(func.count(Invoice.id)).where(Invoice.vendor_id == vendor_id)
+    )
+    inv_count = int(inv_count_q.scalar() or 0)
+
+    if po_count > 0 or inv_count > 0:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": (
+                    f"Vendor has {po_count} purchase order"
+                    f"{'' if po_count == 1 else 's'} and "
+                    f"{inv_count} invoice{'' if inv_count == 1 else 's'}; "
+                    "delete or reassign them before removing the vendor."
+                ),
+                "po_count": po_count,
+                "invoice_count": inv_count,
+            },
+        )
+
+    try:
+        await db.execute(sql_delete(Vendor).where(Vendor.id == vendor_id))
+    except IntegrityError as exc:  # pragma: no cover - race-safety net
+        raise HTTPException(
+            status_code=409,
+            detail="Vendor is still referenced by other records",
+        ) from exc
+    return None
 
 
 @router.post("/vendors/import", response_model=ImportResponse)

@@ -1,4 +1,7 @@
+import { useState } from "react"
 import { Link } from "react-router-dom"
+import { isAxiosError } from "axios"
+import { toast } from "sonner"
 import {
   ShoppingCart,
   Calendar,
@@ -6,21 +9,38 @@ import {
   Package,
   Truck,
   ArrowRight,
+  Pencil,
+  Trash2,
+  Loader2,
 } from "lucide-react"
 
 import {
   Sheet,
   SheetContent,
   SheetDescription,
+  SheetFooter,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { VendorBadge } from "@/components/shared/VendorBadge"
 import { BusinessStatusBadge } from "@/components/invoice/BusinessStatusBadge"
+import { POForm } from "@/components/po/POForm"
 import {
+  useDeletePO,
   usePurchaseOrder,
   usePurchaseOrderInvoices,
 } from "@/api/purchase-orders"
@@ -33,6 +53,11 @@ import {
   shortId,
 } from "@/lib/format"
 import type { BusinessStatus } from "@/api/types"
+
+interface DeleteErrorDetail {
+  message?: string
+  reconciliation_count?: number
+}
 
 function receiptStatusVariant(
   status: string
@@ -61,8 +86,46 @@ export function POSheet() {
     enabled: !!poId,
   })
 
+  const [editOpen, setEditOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [forceDelete, setForceDelete] = useState(false)
+  const deleteMutation = useDeletePO()
+
+  const handleSheetOpenChange = (o: boolean) => {
+    if (!o) {
+      close()
+      setEditOpen(false)
+      setDeleteOpen(false)
+      setForceDelete(false)
+    }
+  }
+
+  const onConfirmDelete = async () => {
+    if (!po) return
+    try {
+      await deleteMutation.mutateAsync({ id: po.id, force: forceDelete })
+      toast.success(`Deleted ${po.po_number}`)
+      setDeleteOpen(false)
+      close()
+    } catch (e: unknown) {
+      // 409 with referenced reconciliations -> reveal the force option.
+      if (isAxiosError(e) && e.response?.status === 409) {
+        const detail = e.response.data?.detail as DeleteErrorDetail | string
+        const message =
+          typeof detail === "string"
+            ? detail
+            : detail?.message ?? "PO is referenced by other records"
+        toast.warning("Confirm force delete", { description: message })
+        setForceDelete(true)
+        return
+      }
+      const message = e instanceof Error ? e.message : "Delete failed"
+      toast.error("Could not delete PO", { description: message })
+    }
+  }
+
   return (
-    <Sheet open={open} onOpenChange={(o) => !o && close()}>
+    <Sheet open={open} onOpenChange={handleSheetOpenChange}>
       <SheetContent className="overflow-hidden flex flex-col p-0 sm:max-w-xl">
         <SheetHeader className="space-y-3">
           {!po ? (
@@ -87,6 +150,15 @@ export function POSheet() {
                     </span>
                   </SheetDescription>
                 </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setEditOpen(true)}
+                  aria-label="Edit purchase order"
+                  className="shrink-0"
+                >
+                  <Pencil className="size-4" />
+                </Button>
               </div>
 
               <div className="grid grid-cols-3 divide-x divide-border/60 border-y border-border/60 -mx-6 px-0">
@@ -283,7 +355,89 @@ export function POSheet() {
             )}
           </TabsContent>
         </Tabs>
+
+        {po && (
+          <SheetFooter className="border-t border-border/60 px-6 py-3 mt-0">
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-destructive hover:text-destructive gap-1.5"
+              onClick={() => {
+                setForceDelete(false)
+                setDeleteOpen(true)
+              }}
+            >
+              <Trash2 className="size-3.5" />
+              Delete PO
+            </Button>
+          </SheetFooter>
+        )}
       </SheetContent>
+
+      {po && (
+        <>
+          <POForm
+            open={editOpen}
+            onOpenChange={setEditOpen}
+            poId={po.id}
+          />
+          <AlertDialog
+            open={deleteOpen}
+            onOpenChange={(o) => {
+              setDeleteOpen(o)
+              if (!o) setForceDelete(false)
+            }}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  Delete {po.po_number}?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  {invoices && invoices.length > 0 ? (
+                    <>
+                      This PO is referenced by{" "}
+                      <span className="font-semibold text-foreground">
+                        {invoices.length}{" "}
+                        {invoices.length === 1
+                          ? "reconciliation"
+                          : "reconciliations"}
+                      </span>
+                      . Deleting will detach those records from the PO
+                      (the reconciliations themselves stay) and remove
+                      every line item. This cannot be undone.
+                    </>
+                  ) : (
+                    <>
+                      This will permanently delete the PO and all of
+                      its line items. No reconciliations reference it,
+                      so nothing else is affected.
+                    </>
+                  )}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={deleteMutation.isPending}>
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={(e) => {
+                    e.preventDefault()
+                    onConfirmDelete()
+                  }}
+                  disabled={deleteMutation.isPending}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90 gap-2"
+                >
+                  {deleteMutation.isPending && (
+                    <Loader2 className="size-4 animate-spin" />
+                  )}
+                  {forceDelete ? "Delete anyway" : "Delete"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
+      )}
     </Sheet>
   )
 }

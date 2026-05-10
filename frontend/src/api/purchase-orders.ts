@@ -4,7 +4,9 @@ import type {
   ImportResponse,
   MatchedInvoiceForPO,
   PurchaseOrder,
+  PurchaseOrderCreate,
   PurchaseOrderListItem,
+  PurchaseOrderUpdate,
 } from "./types"
 
 export const poKeys = {
@@ -68,6 +70,66 @@ export function useImportPOsCsv() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: poKeys.all })
+    },
+  })
+}
+
+export function useCreatePO() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (payload: PurchaseOrderCreate) => {
+      const { data } = await apiClient.post<PurchaseOrder>(
+        "/api/purchase-orders",
+        payload
+      )
+      return data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: poKeys.all })
+    },
+  })
+}
+
+export function useUpdatePO() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      id,
+      payload,
+    }: {
+      id: string
+      payload: PurchaseOrderUpdate
+    }) => {
+      const { data } = await apiClient.put<PurchaseOrder>(
+        `/api/purchase-orders/${id}`,
+        payload
+      )
+      return data
+    },
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: poKeys.all })
+      qc.invalidateQueries({ queryKey: poKeys.detail(variables.id) })
+    },
+  })
+}
+
+export function useDeletePO() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      id,
+      force = false,
+    }: {
+      id: string
+      force?: boolean
+    }) => {
+      await apiClient.delete(
+        `/api/purchase-orders/${id}${force ? "?force=true" : ""}`
+      )
+    },
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: poKeys.all })
+      qc.removeQueries({ queryKey: poKeys.detail(variables.id) })
     },
   })
 }

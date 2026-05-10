@@ -1,4 +1,7 @@
+import { useState } from "react"
 import { Link } from "react-router-dom"
+import { isAxiosError } from "axios"
+import { toast } from "sonner"
 import {
   Building2,
   Mail,
@@ -7,19 +10,35 @@ import {
   ShoppingCart,
   FileText,
   Clock,
+  Pencil,
+  Trash2,
+  Loader2,
 } from "lucide-react"
 
 import {
   Sheet,
   SheetContent,
   SheetDescription,
+  SheetFooter,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
+  useDeleteVendor,
   useVendor,
   useVendorInvoices,
   useVendorPOs,
@@ -35,6 +54,13 @@ import {
 } from "@/lib/format"
 import { ProcessingStatusBadge } from "@/components/invoice/ProcessingStatusBadge"
 import { BusinessStatusBadge } from "@/components/invoice/BusinessStatusBadge"
+import { VendorForm } from "@/components/vendor/VendorForm"
+
+interface DeleteErrorDetail {
+  message?: string
+  po_count?: number
+  invoice_count?: number
+}
 
 export function VendorSheet() {
   const vendorId = useVendorSheet((s) => s.vendorId)
@@ -46,8 +72,50 @@ export function VendorSheet() {
   const { data: invoices } = useVendorInvoices(vendorId)
   const { data: stats } = useVendorStats(vendorId)
 
+  const [editOpen, setEditOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteBlockedReason, setDeleteBlockedReason] = useState<string | null>(
+    null
+  )
+  const deleteMutation = useDeleteVendor()
+
+  const handleSheetOpenChange = (o: boolean) => {
+    if (!o) {
+      close()
+      setEditOpen(false)
+      setDeleteOpen(false)
+      setDeleteBlockedReason(null)
+    }
+  }
+
+  const onConfirmDelete = async () => {
+    if (!vendor) return
+    try {
+      await deleteMutation.mutateAsync(vendor.id)
+      toast.success(`Deleted vendor ${vendor.name}`)
+      setDeleteOpen(false)
+      close()
+    } catch (e: unknown) {
+      if (isAxiosError(e) && e.response?.status === 409) {
+        const detail = e.response.data?.detail as DeleteErrorDetail | string
+        const message =
+          typeof detail === "string"
+            ? detail
+            : detail?.message ??
+              "Vendor is still referenced by other records."
+        setDeleteBlockedReason(message)
+        return
+      }
+      const message = e instanceof Error ? e.message : "Delete failed"
+      toast.error("Could not delete vendor", { description: message })
+    }
+  }
+
+  const hasReferences =
+    (pos && pos.length > 0) || (invoices && invoices.length > 0)
+
   return (
-    <Sheet open={open} onOpenChange={(o) => !o && close()}>
+    <Sheet open={open} onOpenChange={handleSheetOpenChange}>
       <SheetContent className="overflow-hidden flex flex-col p-0">
         <SheetHeader className="space-y-3">
           {!vendor ? (
@@ -67,6 +135,15 @@ export function VendorSheet() {
                     <code className="text-xs font-mono">{vendor.code}</code>
                   </SheetDescription>
                 </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setEditOpen(true)}
+                  aria-label="Edit vendor"
+                  className="shrink-0"
+                >
+                  <Pencil className="size-4" />
+                </Button>
               </div>
 
               <div className="space-y-1.5 text-sm pt-2">
@@ -209,7 +286,99 @@ export function VendorSheet() {
             )}
           </TabsContent>
         </Tabs>
+
+        {vendor && (
+          <SheetFooter className="border-t border-border/60 px-6 py-3 mt-0">
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-destructive hover:text-destructive gap-1.5"
+              onClick={() => {
+                setDeleteBlockedReason(null)
+                setDeleteOpen(true)
+              }}
+            >
+              <Trash2 className="size-3.5" />
+              Delete vendor
+            </Button>
+          </SheetFooter>
+        )}
       </SheetContent>
+
+      {vendor && (
+        <>
+          <VendorForm
+            open={editOpen}
+            onOpenChange={setEditOpen}
+            vendor={vendor}
+          />
+          <AlertDialog
+            open={deleteOpen}
+            onOpenChange={(o) => {
+              setDeleteOpen(o)
+              if (!o) setDeleteBlockedReason(null)
+            }}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  Delete {vendor.name}?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  {deleteBlockedReason ? (
+                    <>
+                      <span className="text-destructive font-medium">
+                        Cannot delete:
+                      </span>{" "}
+                      {deleteBlockedReason} Reassign or remove the
+                      referenced records first.
+                    </>
+                  ) : hasReferences ? (
+                    <>
+                      This vendor has{" "}
+                      <span className="font-semibold text-foreground">
+                        {pos?.length ?? 0}{" "}
+                        {(pos?.length ?? 0) === 1
+                          ? "purchase order"
+                          : "purchase orders"}
+                      </span>{" "}
+                      and{" "}
+                      <span className="font-semibold text-foreground">
+                        {invoices?.length ?? 0}{" "}
+                        {(invoices?.length ?? 0) === 1 ? "invoice" : "invoices"}
+                      </span>
+                      . The database will refuse the delete until you
+                      remove or reassign those.
+                    </>
+                  ) : (
+                    "This will permanently delete the vendor. No POs or invoices reference it, so nothing else is affected."
+                  )}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={deleteMutation.isPending}>
+                  {deleteBlockedReason ? "Close" : "Cancel"}
+                </AlertDialogCancel>
+                {!deleteBlockedReason && (
+                  <AlertDialogAction
+                    onClick={(e) => {
+                      e.preventDefault()
+                      onConfirmDelete()
+                    }}
+                    disabled={deleteMutation.isPending}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90 gap-2"
+                  >
+                    {deleteMutation.isPending && (
+                      <Loader2 className="size-4 animate-spin" />
+                    )}
+                    Delete
+                  </AlertDialogAction>
+                )}
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
+      )}
     </Sheet>
   )
 }

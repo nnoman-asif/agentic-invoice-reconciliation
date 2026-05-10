@@ -1,8 +1,9 @@
 import { useState } from "react"
 import { motion } from "framer-motion"
-import { Building2, Mail, Search, ArrowRight } from "lucide-react"
+import { Building2, Mail, Plus, Search, ArrowRight } from "lucide-react"
 
 import { PageHeader } from "@/components/shared/PageHeader"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { TableSkeleton } from "@/components/shared/LoadingSkeleton"
@@ -10,6 +11,7 @@ import { EmptyState } from "@/components/shared/EmptyState"
 import { NoData } from "@/components/shared/illustrations/NoData"
 import { ExportButton } from "@/components/shared/ExportButton"
 import { ImportButton } from "@/components/shared/ImportButton"
+import { VendorForm } from "@/components/vendor/VendorForm"
 import {
   useImportVendorsCsv,
   useVendors,
@@ -30,6 +32,7 @@ const VENDOR_COLUMNS: CsvColumn<Vendor>[] = [
 
 export function VendorsPage() {
   const [search, setSearch] = useState("")
+  const [formOpen, setFormOpen] = useState(false)
   const { data, isLoading } = useVendors()
   const openSheet = useVendorSheet((s) => s.open)
   const importMutation = useImportVendorsCsv()
@@ -62,9 +65,15 @@ export function VendorsPage() {
               columns={VENDOR_COLUMNS}
               filenamePrefix="vendors"
             />
+            <Button size="sm" className="gap-1.5" onClick={() => setFormOpen(true)}>
+              <Plus className="size-4" />
+              New vendor
+            </Button>
           </>
         }
       />
+
+      <VendorForm open={formOpen} onOpenChange={setFormOpen} />
 
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />

@@ -133,6 +133,60 @@ export interface MatchedInvoiceForPO {
   discrepancies_count: number
 }
 
+/** Payload for creating a PO line item (no id). */
+export interface POLineItemInput {
+  line_number: number
+  item_code: string | null
+  item_description: string
+  quantity: number
+  unit_price: number
+  total_price: number
+  unit_of_measure: string | null
+}
+
+/** Body for POST /api/purchase-orders. */
+export interface PurchaseOrderCreate {
+  po_number: string
+  vendor_id: string
+  issue_date: string
+  expected_delivery_date: string | null
+  status: string
+  total_amount: number
+  currency: string
+  notes: string | null
+  line_items: POLineItemInput[]
+}
+
+/** Body for PUT /api/purchase-orders/{id}. All fields optional. */
+export interface PurchaseOrderUpdate {
+  po_number?: string
+  vendor_id?: string
+  issue_date?: string
+  expected_delivery_date?: string | null
+  status?: string
+  currency?: string
+  notes?: string | null
+  line_items?: POLineItemInput[]
+}
+
+/** Body for POST /api/vendors. */
+export interface VendorCreate {
+  code: string
+  name: string
+  tax_id: string | null
+  address: string | null
+  contact_email: string | null
+}
+
+/** Body for PUT /api/vendors/{id}. All fields optional. */
+export interface VendorUpdate {
+  code?: string
+  name?: string
+  tax_id?: string | null
+  address?: string | null
+  contact_email?: string | null
+}
+
 /** Per-row result from a bulk CSV import. */
 export interface ImportRowResult {
   row: number

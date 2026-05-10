@@ -3,7 +3,8 @@ import io
 import uuid
 from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from sqlalchemy import delete as sql_delete
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -24,6 +25,7 @@ from app.models.schemas import (
     PurchaseOrderCreate,
     PurchaseOrderListResponse,
     PurchaseOrderResponse,
+    PurchaseOrderUpdate,
 )
 
 PO_IMPORT_REQUIRED_COLUMNS = (
@@ -97,6 +99,24 @@ async def create_purchase_order(
     data: PurchaseOrderCreate,
     db: AsyncSession = Depends(get_db),
 ):
+    # Check po_number uniqueness up-front so the user gets a friendly
+    # 409 instead of an opaque 500 from a UNIQUE-constraint violation.
+    existing_q = await db.execute(
+        select(PurchaseOrder.id).where(PurchaseOrder.po_number == data.po_number)
+    )
+    if existing_q.scalar_one_or_none():
+        raise HTTPException(
+            status_code=409,
+            detail=f"po_number {data.po_number!r} already exists",
+        )
+
+    # Vendor must exist (otherwise FK explodes on flush).
+    vendor_q = await db.execute(
+        select(Vendor.id).where(Vendor.id == data.vendor_id)
+    )
+    if not vendor_q.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Vendor not found")
+
     po = PurchaseOrder(
         po_number=data.po_number,
         vendor_id=data.vendor_id,
@@ -132,6 +152,170 @@ async def create_purchase_order(
     )
     result = await db.execute(stmt)
     return result.scalar_one()
+
+
+@router.put("/purchase-orders/{po_id}", response_model=PurchaseOrderResponse)
+async def update_purchase_order(
+    po_id: uuid.UUID,
+    data: PurchaseOrderUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a PO. Performs a smart upsert on line items keyed by
+    `line_number` so existing rows referenced by `line_item_matches`
+    are preserved when their content changes — only truly removed
+    lines are deleted.
+    """
+    stmt = (
+        select(PurchaseOrder)
+        .options(selectinload(PurchaseOrder.line_items))
+        .where(PurchaseOrder.id == po_id)
+    )
+    result = await db.execute(stmt)
+    po = result.scalar_one_or_none()
+    if not po:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+
+    # Uniqueness check if po_number is changing.
+    if data.po_number is not None and data.po_number != po.po_number:
+        existing_q = await db.execute(
+            select(PurchaseOrder.id).where(
+                PurchaseOrder.po_number == data.po_number,
+                PurchaseOrder.id != po_id,
+            )
+        )
+        if existing_q.scalar_one_or_none():
+            raise HTTPException(
+                status_code=409,
+                detail=f"po_number {data.po_number!r} already exists",
+            )
+        po.po_number = data.po_number
+
+    if data.vendor_id is not None and data.vendor_id != po.vendor_id:
+        vendor_q = await db.execute(
+            select(Vendor.id).where(Vendor.id == data.vendor_id)
+        )
+        if not vendor_q.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Vendor not found")
+        po.vendor_id = data.vendor_id
+
+    if data.issue_date is not None:
+        po.issue_date = data.issue_date
+    if data.expected_delivery_date is not None:
+        po.expected_delivery_date = data.expected_delivery_date
+    if data.status is not None:
+        po.status = data.status.value
+    if data.currency is not None:
+        po.currency = data.currency
+    if data.notes is not None:
+        po.notes = data.notes
+
+    if data.line_items is not None:
+        # Smart upsert keyed by line_number, using ORM relationship
+        # management so the in-memory `po.line_items` collection stays
+        # in sync (which the response serializer reads from). Updating
+        # in place preserves FK references from
+        # `line_item_matches.po_line_item_id`.
+        incoming_line_numbers = {it.line_number for it in data.line_items}
+        if len(incoming_line_numbers) != len(data.line_items):
+            raise HTTPException(
+                status_code=400,
+                detail="Duplicate line_number in payload",
+            )
+
+        existing_by_line = {li.line_number: li for li in po.line_items}
+
+        for item in data.line_items:
+            existing = existing_by_line.get(item.line_number)
+            if existing is not None:
+                existing.item_code = item.item_code
+                existing.item_description = item.item_description
+                existing.quantity = item.quantity
+                existing.unit_price = item.unit_price
+                existing.total_price = item.total_price
+                existing.unit_of_measure = item.unit_of_measure
+            else:
+                # Append via the relationship so the collection (and
+                # the response payload) reflects it without a refetch.
+                po.line_items.append(
+                    POLineItem(
+                        line_number=item.line_number,
+                        item_code=item.item_code,
+                        item_description=item.item_description,
+                        quantity=item.quantity,
+                        unit_price=item.unit_price,
+                        total_price=item.total_price,
+                        unit_of_measure=item.unit_of_measure,
+                    )
+                )
+
+        # Remove rows no longer in the payload via the relationship —
+        # cascade="all, delete-orphan" turns each remove() into a DELETE.
+        for existing in list(po.line_items):
+            if existing.line_number not in incoming_line_numbers:
+                po.line_items.remove(existing)
+
+        # Recompute total from the merged payload.
+        po.total_amount = round(
+            sum(float(it.total_price) for it in data.line_items), 2
+        )
+
+    await db.flush()
+
+    refresh_stmt = (
+        select(PurchaseOrder)
+        .options(selectinload(PurchaseOrder.line_items))
+        .where(PurchaseOrder.id == po_id)
+    )
+    refreshed = await db.execute(refresh_stmt)
+    return refreshed.scalar_one()
+
+
+@router.delete("/purchase-orders/{po_id}", status_code=204)
+async def delete_purchase_order(
+    po_id: uuid.UUID,
+    force: bool = Query(
+        False,
+        description="If true, also detaches any reconciliations referencing this PO",
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a purchase order.
+
+    By default refuses (409) if any `reconciliations` rows reference
+    this PO so the user can decide explicitly. When `?force=true`,
+    proceeds: reconciliation rows survive (FK is `ON DELETE SET NULL`)
+    but lose their PO link, line items cascade away.
+    """
+    po_q = await db.execute(
+        select(PurchaseOrder.id).where(PurchaseOrder.id == po_id)
+    )
+    if not po_q.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+
+    recon_count_q = await db.execute(
+        select(func.count(Reconciliation.id)).where(
+            Reconciliation.po_id == po_id
+        )
+    )
+    recon_count = int(recon_count_q.scalar() or 0)
+
+    if recon_count > 0 and not force:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": (
+                    f"PO is referenced by {recon_count} reconciliation"
+                    f"{'' if recon_count == 1 else 's'}. Pass ?force=true "
+                    "to delete and detach them."
+                ),
+                "reconciliation_count": recon_count,
+            },
+        )
+
+    await db.execute(
+        sql_delete(PurchaseOrder).where(PurchaseOrder.id == po_id)
+    )
+    return None
 
 
 @router.get("/purchase-orders/{po_id}", response_model=PurchaseOrderResponse)

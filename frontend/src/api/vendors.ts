@@ -4,6 +4,8 @@ import type {
   ImportResponse,
   InvoiceListItem,
   PurchaseOrderListItem,
+  VendorCreate,
+  VendorUpdate,
 } from "./types"
 
 export interface Vendor {
@@ -112,6 +114,55 @@ export function useImportVendorsCsv() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: vendorKeys.all })
+    },
+  })
+}
+
+export function useCreateVendor() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (payload: VendorCreate) => {
+      const { data } = await apiClient.post<Vendor>("/api/vendors", payload)
+      return data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: vendorKeys.all })
+    },
+  })
+}
+
+export function useUpdateVendor() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      id,
+      payload,
+    }: {
+      id: string
+      payload: VendorUpdate
+    }) => {
+      const { data } = await apiClient.put<Vendor>(
+        `/api/vendors/${id}`,
+        payload
+      )
+      return data
+    },
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: vendorKeys.all })
+      qc.invalidateQueries({ queryKey: vendorKeys.detail(variables.id) })
+    },
+  })
+}
+
+export function useDeleteVendor() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await apiClient.delete(`/api/vendors/${id}`)
+    },
+    onSuccess: (_data, id) => {
+      qc.invalidateQueries({ queryKey: vendorKeys.all })
+      qc.removeQueries({ queryKey: vendorKeys.detail(id) })
     },
   })
 }

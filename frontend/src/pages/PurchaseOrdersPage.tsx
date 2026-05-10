@@ -1,8 +1,9 @@
 import { useState } from "react"
 import { motion } from "framer-motion"
-import { ArrowRight, Search } from "lucide-react"
+import { ArrowRight, Plus, Search } from "lucide-react"
 
 import { PageHeader } from "@/components/shared/PageHeader"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -12,6 +13,7 @@ import { NoData } from "@/components/shared/illustrations/NoData"
 import { VendorBadge } from "@/components/shared/VendorBadge"
 import { ExportButton } from "@/components/shared/ExportButton"
 import { ImportButton } from "@/components/shared/ImportButton"
+import { POForm } from "@/components/po/POForm"
 import { useImportPOsCsv, usePurchaseOrders } from "@/api/purchase-orders"
 import { usePOSheet } from "@/store/po"
 import { formatCurrency, formatDate } from "@/lib/format"
@@ -31,6 +33,7 @@ const PO_COLUMNS: CsvColumn<PurchaseOrderListItem>[] = [
 
 export function PurchaseOrdersPage() {
   const [search, setSearch] = useState("")
+  const [formOpen, setFormOpen] = useState(false)
   const { data, isLoading } = usePurchaseOrders()
   const openSheet = usePOSheet((s) => s.open)
   const importMutation = useImportPOsCsv()
@@ -62,9 +65,15 @@ export function PurchaseOrdersPage() {
               columns={PO_COLUMNS}
               filenamePrefix="purchase-orders"
             />
+            <Button size="sm" className="gap-1.5" onClick={() => setFormOpen(true)}>
+              <Plus className="size-4" />
+              New PO
+            </Button>
           </>
         }
       />
+
+      <POForm open={formOpen} onOpenChange={setFormOpen} />
 
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />

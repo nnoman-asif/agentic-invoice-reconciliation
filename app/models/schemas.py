@@ -94,6 +94,15 @@ class VendorCreate(VendorBase):
     pass
 
 
+class VendorUpdate(BaseModel):
+    """All fields optional for PATCH-style partial updates."""
+    name: str | None = None
+    code: str | None = None
+    tax_id: str | None = None
+    address: str | None = None
+    contact_email: str | None = None
+
+
 class VendorResponse(VendorBase):
     id: uuid.UUID
     created_at: datetime
@@ -145,6 +154,24 @@ class PurchaseOrderBase(BaseModel):
 
 class PurchaseOrderCreate(PurchaseOrderBase):
     line_items: list[POLineItemCreate]
+
+
+class PurchaseOrderUpdate(BaseModel):
+    """All fields optional for PATCH-style partial updates.
+
+    When `line_items` is provided, the route does a smart upsert keyed
+    by `line_number` so existing rows referenced by FK
+    (`line_item_matches.po_line_item_id`) survive when their content
+    changes — only truly removed lines are deleted.
+    """
+    po_number: str | None = None
+    vendor_id: uuid.UUID | None = None
+    issue_date: date | None = None
+    expected_delivery_date: date | None = None
+    status: POStatus | None = None
+    currency: str | None = None
+    notes: str | None = None
+    line_items: list[POLineItemCreate] | None = None
 
 
 class PurchaseOrderResponse(PurchaseOrderBase):
