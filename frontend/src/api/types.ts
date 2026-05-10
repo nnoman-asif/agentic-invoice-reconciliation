@@ -4,9 +4,30 @@ export type ProcessingStatus =
   | "queued"
   | "parsing"
   | "matching"
+  | "detecting"
   | "resolving"
   | "completed"
   | "failed"
+
+/**
+ * Statuses that mean "the pipeline is still running on this invoice".
+ * Polling, spinners, and notification storm-prevention all read from
+ * this list so adding a new pipeline stage only requires updating one
+ * place.
+ */
+export const PROCESSING_IN_PROGRESS_STATUSES: ReadonlyArray<ProcessingStatus> = [
+  "queued",
+  "parsing",
+  "matching",
+  "detecting",
+  "resolving",
+]
+
+export function isInvoiceProcessing(
+  status: ProcessingStatus | undefined | null
+): boolean {
+  return !!status && PROCESSING_IN_PROGRESS_STATUSES.includes(status)
+}
 
 export type BusinessStatus =
   | "pending"

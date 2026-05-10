@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiClient } from "./client"
-import type {
-  Invoice,
-  InvoiceListItem,
-  InvoiceUploadResponse,
+import {
+  isInvoiceProcessing,
+  type Invoice,
+  type InvoiceListItem,
+  type InvoiceUploadResponse,
 } from "./types"
 
 // Re-exported from the canonical reconciliation module. Older callsites
@@ -45,12 +46,8 @@ export function useInvoices(filters?: {
     },
     refetchInterval: (query) => {
       const data = query.state.data
-      const hasProcessing = data?.some(
-        (inv) =>
-          inv.processing_status === "queued" ||
-          inv.processing_status === "parsing" ||
-          inv.processing_status === "matching" ||
-          inv.processing_status === "resolving"
+      const hasProcessing = data?.some((inv) =>
+        isInvoiceProcessing(inv.processing_status)
       )
       return hasProcessing ? 2000 : false
     },
@@ -67,13 +64,7 @@ export function useInvoice(id: string | undefined) {
     enabled: !!id,
     refetchInterval: (query) => {
       const data = query.state.data
-      if (!data) return false
-      const isProcessing =
-        data.processing_status === "queued" ||
-        data.processing_status === "parsing" ||
-        data.processing_status === "matching" ||
-        data.processing_status === "resolving"
-      return isProcessing ? 1500 : false
+      return isInvoiceProcessing(data?.processing_status) ? 1500 : false
     },
   })
 }

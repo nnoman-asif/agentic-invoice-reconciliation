@@ -1,4 +1,4 @@
-import { useMemo } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useInvoice, useInvoiceReconciliation } from "@/api/invoices"
 import type { ProcessingStatus } from "@/api/types"
 
@@ -17,6 +17,36 @@ export interface AgentStageState {
   status: StageStatus
   duration?: number
   output?: Record<string, unknown>
+}
+
+/** Return shape of `useLivePipeline`, exported so consumers can pass
+ *  the result down as a prop instead of re-running the hook (which
+ *  would create a second `displayedIndex` state and let the sidebar
+ *  and the visualizer drift out of sync). */
+export interface LivePipeline {
+  stages: AgentStageState[]
+  invoice:
+    | NonNullable<ReturnType<typeof useInvoice>["data"]>
+    | undefined
+  isProcessing: boolean
+  isFailed: boolean
+  totalProcessingMs: number | null
+  /**
+   * The processing_status value that the visualizer is *displaying*
+   * right now. Differs from `invoice.processing_status` while the
+   * catch-up animation is mid-flight (server may already say
+   * "completed" while the UI is still walking matcher → anomaly →
+   * resolving). Lets sidebars/badges stay in sync with the canvas.
+   */
+  displayedStatus: ProcessingStatus | undefined
+}
+
+const INDEX_TO_STATUS: Record<number, ProcessingStatus> = {
+  0: "parsing",
+  1: "matching",
+  2: "detecting",
+  3: "resolving",
+  4: "completed",
 }
 
 const STAGES: { id: AgentStage; label: string; description: string }[] = [
@@ -43,19 +73,32 @@ const STAGES: { id: AgentStage; label: string; description: string }[] = [
 ]
 
 // Maps an invoice's processing_status to the index of the stage
-// that's "running" (or -1 / -2 for special states).
+// that's "running" (or 4 / -2 for special states).
 //   * queued maps to 0 so the parser node lights up "running" the
 //     moment the upload is enqueued -- previously queued mapped to
 //     -1, which left every stage idle and made it look like nothing
 //     was happening even though work was imminent.
+//   * "detecting" exists so the anomaly node has a status to live
+//     under, otherwise the matcher would flip straight to "resolving"
+//     and the anomaly node would never appear active.
 const STATUS_TO_INDEX: Record<ProcessingStatus, number> = {
   queued: 0,
   parsing: 0,
   matching: 1,
-  resolving: 3, // resolution agent runs during this status
+  detecting: 2,
+  resolving: 3,
   completed: 4,
   failed: -2,
 }
+
+// How long each intermediate stage stays visible while the visualizer
+// catches up to a new server status. Several agents (matcher, anomaly,
+// resolution) frequently complete in under 100ms, much faster than the
+// 1.5s polling interval, so without this throttle the UI would jump
+// from "parser running" straight to "all done" and the user would
+// never see the in-between stages light up. Cosmetic only; doesn't
+// alter underlying data.
+const STAGE_ADVANCE_MS = 1000
 
 export function useLivePipeline(invoiceId: string | undefined) {
   const { data: invoice } = useInvoice(invoiceId)
@@ -63,41 +106,92 @@ export function useLivePipeline(invoiceId: string | undefined) {
     invoiceProcessingStatus: invoice?.processing_status,
   })
 
-  return useMemo<{
-    stages: AgentStageState[]
-    invoice: typeof invoice
-    isProcessing: boolean
-    isFailed: boolean
-  }>(() => {
-    const isFailed = invoice?.processing_status === "failed"
-    const isProcessing =
-      !!invoice &&
-      invoice.processing_status !== "completed" &&
-      invoice.processing_status !== "failed"
+  // Server-driven "where the pipeline really is" index.
+  // -1 = no invoice yet, -2 = failed, 0-3 = stage running, 4 = done.
+  const serverIndex = invoice
+    ? STATUS_TO_INDEX[invoice.processing_status] ?? -1
+    : -1
 
-    // Fall back to -1 for any unknown status string the backend might
-    // return so the UI doesn't render `undefined` comparisons that
-    // produce nonsense stage states.
-    const currentIndex = invoice
-      ? STATUS_TO_INDEX[invoice.processing_status] ?? -1
-      : -1
+  // Cosmetic "where the visualizer is showing" index. Tracks
+  // serverIndex with a small throttled lag so each stage gets visible
+  // air time even when the backend rips through them.
+  const [displayedIndex, setDisplayedIndex] = useState(serverIndex)
+  const lastInvoiceId = useRef(invoiceId)
+  // Tracks whether we've already seen an invoice payload land for the
+  // current id. The very first invoice fetch flips this to true and we
+  // snap to whatever state the server reports -- so a page refresh on
+  // a completed invoice shows it as completed instantly instead of
+  // re-playing the entire 0 → 4 animation.
+  const hasSnappedToInitial = useRef(false)
+
+  useEffect(() => {
+    // Switching invoices: reset the snap guard so the new invoice's
+    // first server value also snaps immediately.
+    if (lastInvoiceId.current !== invoiceId) {
+      lastInvoiceId.current = invoiceId
+      hasSnappedToInitial.current = false
+      setDisplayedIndex(serverIndex)
+      return
+    }
+    // First time we ever see real data for this invoice (-1 means
+    // invoice query hasn't resolved yet). Snap, don't animate.
+    if (!hasSnappedToInitial.current && serverIndex !== -1) {
+      hasSnappedToInitial.current = true
+      setDisplayedIndex(serverIndex)
+      return
+    }
+    // Failed: jump straight there so the error stage lights up now.
+    if (serverIndex === -2) {
+      setDisplayedIndex(-2)
+      return
+    }
+    // Already caught up (or ahead, if the server somehow regressed).
+    if (displayedIndex >= serverIndex) {
+      if (displayedIndex !== serverIndex) setDisplayedIndex(serverIndex)
+      return
+    }
+    // Behind by one or more stages -> tick forward by one with a delay.
+    const timer = window.setTimeout(() => {
+      setDisplayedIndex((prev) => Math.min(prev + 1, serverIndex))
+    }, STAGE_ADVANCE_MS)
+    return () => window.clearTimeout(timer)
+  }, [serverIndex, displayedIndex, invoiceId])
+
+  return useMemo<LivePipeline>(() => {
+    // Drive `isProcessing`, the badge label, and `totalProcessingMs`
+    // from `displayedIndex` rather than the raw server status.
+    // Otherwise the server may report "completed" while the catch-up
+    // animation is still walking through stages 1..3, producing a
+    // contradictory header that says "Completed · 0/4 stages" with a
+    // spinning Parser node underneath.
+    const currentIndex = displayedIndex
+    const isFailed = currentIndex === -2
+    const isAnimating = currentIndex >= 0 && currentIndex < 4
+    const isProcessing = isAnimating
+
+    // When the pipeline failed, the parser is the most common culprit
+    // but not the only one -- if `parsed_data` is populated the parser
+    // clearly succeeded, so blame the next-most-likely stage instead.
+    // Any stages before the failed one are kept "completed" so the
+    // visualizer reflects how far the pipeline actually got.
+    let failureIndex = -1
+    if (currentIndex === -2) {
+      failureIndex = invoice?.parsed_data ? 1 : 0
+    }
 
     const stages: AgentStageState[] = STAGES.map((stage, idx) => {
       let status: StageStatus = "idle"
 
       if (currentIndex === -2) {
-        // failed: mark first stage as error or whatever was running
-        status = idx === 0 ? "error" : "idle"
+        if (idx < failureIndex) status = "completed"
+        else if (idx === failureIndex) status = "error"
+        else status = "idle"
       } else if (currentIndex === 4) {
-        // all completed
         status = "completed"
       } else if (idx < currentIndex) {
         status = "completed"
       } else if (idx === currentIndex) {
         status = "running"
-      } else if (currentIndex >= 1 && idx === 2 && currentIndex >= 2) {
-        // anomaly typically runs together with matching
-        status = "completed"
       } else {
         status = "idle"
       }
@@ -131,7 +225,12 @@ export function useLivePipeline(invoiceId: string | undefined) {
         overall_status: recon.overall_status,
         confidence: recon.confidence_score,
       }
-      stages[3].duration = recon.processing_time_ms ?? undefined
+    }
+
+    let displayedStatus: ProcessingStatus | undefined
+    if (currentIndex === -2) displayedStatus = "failed"
+    else if (currentIndex >= 0 && currentIndex <= 4) {
+      displayedStatus = INDEX_TO_STATUS[currentIndex]
     }
 
     return {
@@ -139,8 +238,18 @@ export function useLivePipeline(invoiceId: string | undefined) {
       invoice,
       isProcessing,
       isFailed,
+      // Whole-pipeline wall time. Surface this once at the top of the
+      // visualizer instead of attaching it to a single stage -- the
+      // previous code stuck this on stages[3] which made it look like
+      // the resolution agent took 34s when in reality the parser was
+      // the slow one. Withheld until the catch-up animation reaches
+      // the final node so the header doesn't trumpet "Total time" on
+      // top of a still-spinning visualization.
+      totalProcessingMs:
+        currentIndex === 4 ? recon?.processing_time_ms ?? null : null,
+      displayedStatus,
     }
-  }, [invoice, recon])
+  }, [invoice, recon, displayedIndex])
 }
 
 export const PIPELINE_STAGES = STAGES

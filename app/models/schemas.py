@@ -25,6 +25,7 @@ class ProcessingStatus(str, Enum):
     QUEUED = "queued"
     PARSING = "parsing"
     MATCHING = "matching"
+    DETECTING = "detecting"  # anomaly agent running
     RESOLVING = "resolving"
     COMPLETED = "completed"
     FAILED = "failed"

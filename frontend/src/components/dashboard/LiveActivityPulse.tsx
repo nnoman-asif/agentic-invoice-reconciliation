@@ -4,18 +4,14 @@ import { Activity } from "lucide-react"
 
 import { Card, CardContent } from "@/components/ui/card"
 import { useInvoices } from "@/api/invoices"
+import { isInvoiceProcessing } from "@/api/types"
 import { ProcessingStatusBadge } from "@/components/invoice/ProcessingStatusBadge"
 import { shortId } from "@/lib/format"
 
-const ACTIVE_STATUSES = ["queued", "parsing", "matching", "resolving"] as const
-
 export function LiveActivityPulse() {
   const { data: invoices } = useInvoices()
-  const active = invoices?.filter((inv) =>
-    ACTIVE_STATUSES.includes(
-      inv.processing_status as (typeof ACTIVE_STATUSES)[number]
-    )
-  ) ?? []
+  const active =
+    invoices?.filter((inv) => isInvoiceProcessing(inv.processing_status)) ?? []
 
   return (
     <AnimatePresence>

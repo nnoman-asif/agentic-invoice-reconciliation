@@ -1,4 +1,13 @@
-import { Code2, FileInput, FileOutput, BookOpen } from "lucide-react"
+import {
+  Code2,
+  FileInput,
+  FileOutput,
+  BookOpen,
+  Loader2,
+  Clock,
+  CheckCircle2,
+  AlertCircle,
+} from "lucide-react"
 
 import {
   Tabs,
@@ -7,7 +16,12 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs"
 import { Card, CardContent } from "@/components/ui/card"
-import type { AgentStage, AgentStageState } from "@/hooks/useLivePipeline"
+import type {
+  AgentStage,
+  AgentStageState,
+  StageStatus,
+} from "@/hooks/useLivePipeline"
+import { cn } from "@/lib/utils"
 
 const SYSTEM_PROMPTS: Record<AgentStage, string> = {
   parser: `You are an invoice data extraction specialist. Given the raw text of an invoice document, extract all relevant structured information.
@@ -109,30 +123,115 @@ export function AgentInternals({ stage }: Props) {
           </TabsContent>
 
           <TabsContent value="input" className="p-0 m-0">
-            <CodeBlock
-              label="Last input"
-              content={
-                stage.output
-                  ? "[See live data in pipeline state]\n\nThis is the data structure passed in:\n" +
-                    JSON.stringify(getStageInputShape(stage.id), null, 2)
-                  : "Awaiting execution…"
-              }
+            <StageBody
+              label="Input shape"
+              status={stage.status}
+              hasData={!!stage.output}
+              content={JSON.stringify(getStageInputShape(stage.id), null, 2)}
+              runningHint="The agent is processing right now — input is being consumed."
+              completedHint="See live data in the pipeline state above. Schema:"
             />
           </TabsContent>
 
           <TabsContent value="output" className="p-0 m-0">
-            <CodeBlock
+            <StageBody
               label="Last output"
+              status={stage.status}
+              hasData={!!stage.output}
               content={
-                stage.output
-                  ? JSON.stringify(stage.output, null, 2)
-                  : "Awaiting execution…"
+                stage.output ? JSON.stringify(stage.output, null, 2) : ""
               }
+              runningHint="Agent is still executing — output will appear once this stage completes."
+              completedHint="Output captured from the last run:"
             />
           </TabsContent>
         </Tabs>
       </CardContent>
     </Card>
+  )
+}
+
+function StageBody({
+  label,
+  status,
+  hasData,
+  content,
+  runningHint,
+  completedHint,
+}: {
+  label: string
+  status: StageStatus
+  hasData: boolean
+  content: string
+  runningHint: string
+  completedHint: string
+}) {
+  // Idle: stage hasn't started yet.
+  if (status === "idle") {
+    return (
+      <StagePlaceholder
+        icon={<Clock className="size-4" />}
+        title="Waiting to run"
+        body="An earlier stage is still in progress. This panel will fill in as the pipeline reaches it."
+      />
+    )
+  }
+
+  // Running: spinner + clear "in flight" message.
+  if (status === "running") {
+    return (
+      <StagePlaceholder
+        icon={<Loader2 className="size-4 animate-spin" />}
+        title="Running…"
+        body={runningHint}
+        accent="primary"
+      />
+    )
+  }
+
+  // Error: surface that the pipeline failed at this stage.
+  if (status === "error") {
+    return (
+      <StagePlaceholder
+        icon={<AlertCircle className="size-4" />}
+        title="Failed"
+        body="This stage errored out. See the invoice's error message for details."
+        accent="destructive"
+      />
+    )
+  }
+
+  // Completed: render the data when we have it; otherwise note that
+  // the recon row hasn't streamed in yet (rare, very brief window
+  // between status=completed and recon GET landing).
+  if (!hasData) {
+    return (
+      <StagePlaceholder
+        icon={<CheckCircle2 className="size-4" />}
+        title="Completed"
+        body="Loading captured data…"
+        accent="success"
+      />
+    )
+  }
+
+  return (
+    <div className="border-t border-border/60 m-6 mt-4 rounded-lg bg-muted/30 overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-border/60 bg-muted/40">
+        <Code2 className="size-3.5 text-muted-foreground" />
+        <span className="text-xs font-medium text-muted-foreground">
+          {label}
+        </span>
+      </div>
+      {completedHint && (
+        <p className="px-4 pt-3 text-xs text-muted-foreground">
+          {completedHint}
+        </p>
+      )}
+      <pre className="p-4 text-xs font-mono whitespace-pre-wrap break-words leading-relaxed max-h-80 overflow-y-auto">
+        {content}
+      </pre>
+    </div>
   )
 }
 
@@ -145,9 +244,46 @@ function CodeBlock({ label, content }: { label: string; content: string }) {
           {label}
         </span>
       </div>
-      <pre className="p-4 text-xs font-mono overflow-x-auto leading-relaxed max-h-80">
+      {/* whitespace-pre-wrap + break-words so long lines wrap inside
+          the card instead of forcing horizontal scroll on the whole
+          page. Combined with min-w-0 on the grid cell that holds this
+          card, the prompt no longer pushes the layout wider than the
+          viewport. */}
+      <pre className="p-4 text-xs font-mono whitespace-pre-wrap break-words leading-relaxed max-h-80 overflow-y-auto">
         {content}
       </pre>
+    </div>
+  )
+}
+
+function StagePlaceholder({
+  icon,
+  title,
+  body,
+  accent,
+}: {
+  icon: React.ReactNode
+  title: string
+  body: string
+  accent?: "primary" | "success" | "destructive"
+}) {
+  return (
+    <div className="border-t border-border/60 m-6 mt-4 rounded-lg bg-muted/30 px-4 py-6 flex items-start gap-3">
+      <div
+        className={cn(
+          "shrink-0 mt-0.5",
+          accent === "primary" && "text-primary",
+          accent === "success" && "text-success",
+          accent === "destructive" && "text-destructive",
+          !accent && "text-muted-foreground"
+        )}
+      >
+        {icon}
+      </div>
+      <div className="space-y-1">
+        <div className="text-sm font-medium">{title}</div>
+        <p className="text-xs text-muted-foreground">{body}</p>
+      </div>
     </div>
   )
 }

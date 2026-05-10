@@ -4,15 +4,19 @@ import { motion, AnimatePresence } from "framer-motion"
 import { AgentNode } from "./AgentNode"
 import { AnimatedEdge } from "./AnimatedEdge"
 import { AgentInternals } from "./AgentInternals"
-import { useLivePipeline, type AgentStage } from "@/hooks/useLivePipeline"
+import {
+  type AgentStage,
+  type LivePipeline,
+} from "@/hooks/useLivePipeline"
 import { Card, CardContent } from "@/components/ui/card"
+import { formatDuration } from "@/lib/format"
 
 interface Props {
-  invoiceId: string
+  pipeline: LivePipeline
 }
 
-export function PipelineVisualizer({ invoiceId }: Props) {
-  const { stages, invoice, isProcessing } = useLivePipeline(invoiceId)
+export function PipelineVisualizer({ pipeline }: Props) {
+  const { stages, invoice, isProcessing, totalProcessingMs } = pipeline
   const [selected, setSelected] = useState<AgentStage | null>(null)
 
   const selectedStage = selected
@@ -70,8 +74,12 @@ export function PipelineVisualizer({ invoiceId }: Props) {
               value={invoice?.invoice_number ?? "Pending parse"}
             />
             <Field
-              label="Stages complete"
-              value={`${stages.filter((s) => s.status === "completed").length} / ${stages.length}`}
+              label={totalProcessingMs ? "Total time" : "Stages complete"}
+              value={
+                totalProcessingMs
+                  ? formatDuration(totalProcessingMs)
+                  : `${stages.filter((s) => s.status === "completed").length} / ${stages.length}`
+              }
             />
           </div>
 

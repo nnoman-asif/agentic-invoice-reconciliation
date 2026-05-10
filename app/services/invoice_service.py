@@ -31,10 +31,13 @@ OUTCOME_FAILED = "failed"
 
 
 # After each named graph node finishes, set the invoice to this status
-# so the live pipeline visualizer reflects progress.
+# so the live pipeline visualizer can reflect progress one stage at a
+# time. "detecting" exists purely so the anomaly node has a status to
+# light up under -- it would otherwise be invisible since the matcher
+# would flip straight to "resolving".
 _NODE_TO_STATUS_AFTER: dict[str, str] = {
     "parse_invoice": "matching",
-    "match_records": "resolving",
+    "match_records": "detecting",
     "detect_anomalies": "resolving",
     "rag_retrieve": "resolving",
 }
