@@ -93,7 +93,8 @@ Infrastructure: PostgreSQL+pgvector | Redis | Ollama (Qwen 2.5 7B) | Langfuse
 - **Live Pipeline Visualizer**: Watch each agent execute in real-time with timing and click any stage to inspect its output
 - **Side-by-Side Document Compare**: PDF viewer next to matched PO/delivery data with animated SVG match lines
 - **3D Reconciliation Flow**: Cinematic Three.js scene of invoices flowing through the pipeline
-- **Cmd+K Command Palette**: Global search and navigation
+- **PO and Vendor management**: Full CRUD for purchase orders and vendors with detail sheets, dynamic line-item editor, vendor combobox picker, and bulk CSV import
+- **Command Palette**: Global search + navigation, opened with `⌘K` on macOS or `Ctrl+K` on Windows/Linux
 - **Real-time Updates**: TanStack Query polls for status changes during processing
 - **Mobile-Responsive**: Works on phones, tablets, and desktops
 
@@ -241,11 +242,20 @@ curl -X POST http://localhost:8000/api/exceptions/{reconciliation_id}/reject \
 ### Data Management
 
 ```bash
-# List purchase orders
-curl http://localhost:8000/api/purchase-orders
+# Purchase orders
+curl http://localhost:8000/api/purchase-orders                              # list
+curl http://localhost:8000/api/purchase-orders/{po_id}                      # detail (with line items)
+curl http://localhost:8000/api/purchase-orders/{po_id}/invoices             # invoices reconciled against this PO
 
-# List vendors
-curl http://localhost:8000/api/vendors
+# Vendors
+curl http://localhost:8000/api/vendors                                      # list
+curl http://localhost:8000/api/vendors/{vendor_id}                          # detail
+curl http://localhost:8000/api/vendors/{vendor_id}/purchase-orders          # POs from this vendor
+curl http://localhost:8000/api/vendors/{vendor_id}/invoices                 # invoices from this vendor
+curl http://localhost:8000/api/vendors/{vendor_id}/stats                    # aggregated counts
+
+# Delivery receipts (filter by PO with ?po_id=)
+curl "http://localhost:8000/api/delivery-receipts?po_id={po_id}"
 
 # Dashboard stats
 curl http://localhost:8000/api/dashboard/stats
@@ -253,6 +263,18 @@ curl http://localhost:8000/api/dashboard/stats
 # Health check
 curl http://localhost:8000/health
 ```
+
+POs and vendors also support write operations:
+`POST /api/{purchase-orders,vendors}` to create,
+`PUT /api/{purchase-orders,vendors}/{id}` to update,
+`DELETE /api/{purchase-orders,vendors}/{id}` to remove.
+
+POs return **409** on `DELETE` when reconciliations reference them
+(pass `?force=true` to detach and delete anyway). Vendors return
+**409** when POs or invoices reference them — those references must
+be reassigned or removed first (the schema FKs are `RESTRICT`).
+Full request/response shapes live in the Swagger UI at
+**http://localhost:8000/docs**.
 
 ### Bulk CSV Imports
 
@@ -358,7 +380,7 @@ agentic-invoice-reconciliation/
 │   ├── main.py                     # App entrypoint with CORS + static files
 │   ├── config.py                   # Settings via pydantic-settings
 │   ├── worker.py                   # Redis queue consumer
-│   ├── api/routes/                 # 6 route modules + webhook
+│   ├── api/routes/                 # 7 route modules + webhook
 │   ├── agents/                     # LangGraph state machine + 4 agents
 │   ├── tools/                      # PDF extraction, DB queries, matching, anomalies
 │   ├── rag/                        # Embeddings, indexer, retriever
@@ -367,21 +389,25 @@ agentic-invoice-reconciliation/
 │   ├── services/                   # Invoice + reconciliation orchestration
 │   └── observability/              # Langfuse v3 tracing
 ├── frontend/                       # React + Vite frontend
+│   ├── public/
+│   │   └── samples/                # CSV templates downloadable from the Import dialog
 │   ├── src/
 │   │   ├── api/                    # TanStack Query hooks per resource
 │   │   ├── components/
-│   │   │   ├── ui/                 # shadcn/ui primitives
-│   │   │   ├── layout/             # Sidebar, TopBar, ThemeToggle, CommandPalette
+│   │   │   ├── ui/                 # shadcn/ui primitives (incl. Combobox, AlertDialog, Popover)
+│   │   │   ├── layout/             # Sidebar, TopBar, CommandPalette, ShortcutsOverlay, NotificationBell
 │   │   │   ├── invoice/            # Status badges, upload zone, table, line matches
+│   │   │   ├── po/                 # POForm (create/edit dialog with dynamic line items)
+│   │   │   ├── vendor/             # VendorForm (create/edit dialog)
 │   │   │   ├── pipeline/           # Live agent visualizer (Wow #1)
 │   │   │   ├── compare/            # Side-by-side document compare (Wow #2)
 │   │   │   ├── flow/               # 3D Three.js scene (Wow #3)
 │   │   │   ├── dashboard/          # Stat cards, charts, activity feed
-│   │   │   └── shared/             # PageHeader, AnimatedNumber, ConfidenceBar, etc.
-│   │   ├── pages/                  # 10 routed pages
-│   │   ├── hooks/                  # useTheme, useLivePipeline
-│   │   ├── lib/                    # cn(), format helpers, route constants
-│   │   ├── store/                  # Zustand UI state
+│   │   │   └── shared/             # PageHeader, POSheet, VendorSheet, ImportButton, ExportButton, …
+│   │   ├── pages/                  # 11 routed pages
+│   │   ├── hooks/                  # useTheme, useLivePipeline, useShortcuts, useDemoMode
+│   │   ├── lib/                    # cn(), format helpers, route constants, platform helpers
+│   │   ├── store/                  # Zustand UI state (incl. POSheet, VendorSheet)
 │   │   └── styles/globals.css      # Tailwind + design tokens
 │   ├── package.json
 │   ├── vite.config.ts

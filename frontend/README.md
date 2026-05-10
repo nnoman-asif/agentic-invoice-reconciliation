@@ -25,10 +25,13 @@ Production-grade React + TypeScript UI for the Invoice Reconciliation Agent back
 6. `/pipeline` — Live agent pipeline visualizer **(Wow #1)**
 7. `/flow` — 3D Three.js scene **(Wow #3)**
 8. `/exceptions` — Pending review with approve/reject
-9. `/purchase-orders` — Searchable PO table
-10. `/settings` — Theme, system health, about
+9. `/purchase-orders` — Searchable PO table with detail sheet, CSV import/export, and add/edit/delete
+10. `/vendors` — Vendor table with detail sheet, CSV import/export, and add/edit/delete
+11. `/settings` — Theme, system health, about
 
-Plus: **Cmd+K** command palette for global navigation.
+Plus a **command palette** for global search & navigation, opened with
+`⌘K` on macOS or `Ctrl+K` on Windows/Linux. Press `?` anywhere to see
+all keyboard shortcuts.
 
 ## Setup
 
