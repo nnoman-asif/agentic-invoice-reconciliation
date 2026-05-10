@@ -1,4 +1,4 @@
-import { Search, Command, Activity, Menu } from "lucide-react"
+import { Search, Activity, Menu } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -9,12 +9,15 @@ import { ThemeToggle } from "./ThemeToggle"
 import { NotificationBell } from "./NotificationBell"
 import { useMobileSidebar } from "./MobileSidebar"
 import { cn } from "@/lib/utils"
+import { isMacPlatform, modKeyLabel } from "@/lib/platform"
 
 export function TopBar() {
   const setCommandOpen = useUIStore((s) => s.setCommandPaletteOpen)
   const openMobileSidebar = useMobileSidebar((s) => s.setOpen)
   const { data: health } = useHealth()
   const isDesktop = useMediaQuery("(min-width: 1024px)")
+  const isMac = isMacPlatform()
+  const modKey = modKeyLabel()
 
   const overallHealthy = health?.status === "healthy"
 
@@ -49,8 +52,10 @@ export function TopBar() {
             </span>
             <span className="inline sm:hidden">Search…</span>
           </span>
-          <kbd className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-muted text-muted-foreground border border-border/60 shrink-0">
-            <Command className="size-3" />K
+          <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-mono bg-muted text-muted-foreground border border-border/60 shrink-0">
+            <span>{modKey}</span>
+            {!isMac && <span aria-hidden>+</span>}
+            <span>K</span>
           </kbd>
         </button>
 
