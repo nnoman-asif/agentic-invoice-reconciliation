@@ -68,7 +68,7 @@ export function HeroAnimation() {
         <svg
           viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
           xmlns="http://www.w3.org/2000/svg"
-          className="absolute inset-0 w-full h-full"
+          className="absolute inset-0 w-full h-full overflow-hidden"
           preserveAspectRatio="xMidYMid meet"
         >
           {/* Path connecting stations */}
@@ -191,9 +191,9 @@ function FloatingInvoice({
 
   return (
     <motion.g
-      initial={{ opacity: 0 }}
+      initial={{ opacity: 0, x: -w * 2, y: ridingY }}
       animate={{
-        opacity: [0, 1, 1, 1, 1, 0],
+        opacity: [0, 0, 1, 1, 1, 0],
         x: xs,
         y: ys,
       }}
@@ -203,7 +203,7 @@ function FloatingInvoice({
         repeatDelay: INVOICES.length * 2.6 - TRAVEL_DURATION + 1,
         delay,
         ease: "easeInOut",
-        times: [0, 0.12, 0.36, 0.6, 0.84, 1],
+        times: [0, 0.05, 0.12, 0.6, 0.84, 1],
       }}
     >
       {/* Card */}

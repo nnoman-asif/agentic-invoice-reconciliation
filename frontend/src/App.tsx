@@ -10,6 +10,7 @@ import {
 } from "@/components/layout/ShortcutsOverlay"
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary"
 import { PageLoadingBar } from "@/components/shared/PageLoadingBar"
+import { POSheet } from "@/components/shared/POSheet"
 import { VendorSheet } from "@/components/shared/VendorSheet"
 import { ROUTES } from "@/lib/routes"
 import { useTheme } from "@/hooks/useTheme"
@@ -25,6 +26,7 @@ import { PipelinePage } from "@/pages/PipelinePage"
 import { FlowPage } from "@/pages/FlowPage"
 import { ExceptionsPage } from "@/pages/ExceptionsPage"
 import { PurchaseOrdersPage } from "@/pages/PurchaseOrdersPage"
+import { VendorsPage } from "@/pages/VendorsPage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import { NotFoundPage } from "@/pages/NotFoundPage"
 
@@ -47,6 +49,7 @@ export default function App() {
       <CommandPalette />
       <ShortcutsOverlay />
       <VendorSheet />
+      <POSheet />
       <AnimatePresence mode="wait">
         <ErrorBoundary key={location.pathname}>
           <Routes location={location}>
@@ -67,6 +70,7 @@ export default function App() {
                 path={ROUTES.purchaseOrders}
                 element={<PurchaseOrdersPage />}
               />
+              <Route path={ROUTES.vendors} element={<VendorsPage />} />
               <Route path={ROUTES.settings} element={<SettingsPage />} />
             </Route>
 

@@ -169,6 +169,23 @@ class PurchaseOrderListResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class MatchedInvoiceForPO(BaseModel):
+    """Compact view of an invoice that has reconciled against a PO.
+
+    Used by the PO detail sheet's 'Matched Invoices' tab so the user can
+    see which invoices in their pipeline were matched to this PO and
+    jump into any of them.
+    """
+    invoice_id: uuid.UUID
+    invoice_number: str | None
+    business_status: str
+    total_amount: float | None
+    reconciliation_id: uuid.UUID
+    match_type: str
+    overall_status: str
+    discrepancies_count: int
+
+
 # ── Delivery Receipt ──────────────────────────────────────────────
 
 class DeliveryLineItemCreate(BaseModel):

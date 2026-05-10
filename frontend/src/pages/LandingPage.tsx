@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { MagneticButton } from "@/components/shared/MagneticButton"
 import { HeroAnimation } from "@/components/landing/HeroAnimation"
-import { LiveStats } from "@/components/landing/LiveStats"
 import {
   FeatureMiniDiagram,
   type FeatureVariant,
@@ -114,9 +113,10 @@ export function LandingPage() {
             , in seconds.
           </h1>
           <p className="mt-6 max-w-2xl mx-auto text-lg text-muted-foreground text-balance">
-            Multi-agent pipeline that parses invoices, matches purchase orders
-            and delivery receipts, detects anomalies, and routes exceptions to
-            humans. Built with LangGraph, FastAPI, and local LLMs.
+            Drop in an invoice PDF — agents parse it, three-way match against
+            your purchase orders and delivery receipts, surface only the
+            exceptions worth your time, and learn from every decision you
+            make.
           </p>
           <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
             <MagneticButton>
@@ -159,26 +159,6 @@ export function LandingPage() {
         >
           <HeroAnimation />
         </motion.div>
-      </section>
-
-      {/* Live stats */}
-      <section className="relative z-10 max-w-7xl mx-auto px-6 pb-20">
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5 }}
-          className="text-center mb-10"
-        >
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
-            Working right now.
-          </h2>
-          <p className="mt-2 text-sm text-muted-foreground max-w-xl mx-auto">
-            Numbers below are live from the running database — every value
-            updates as invoices flow through the pipeline.
-          </p>
-        </motion.div>
-        <LiveStats />
       </section>
 
       {/* Features grid */}
@@ -245,9 +225,20 @@ export function LandingPage() {
         </Card>
       </section>
 
-      <footer className="relative z-10 max-w-7xl mx-auto px-6 py-8 border-t border-border/60 text-center text-xs text-muted-foreground">
-        Built with LangGraph, FastAPI, PostgreSQL+pgvector, Redis, Ollama, and
-        React.
+      <footer className="relative z-10 max-w-7xl mx-auto px-6 py-8 border-t border-border/60 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+        <span>Open source</span>
+        <span aria-hidden>·</span>
+        <span>MIT</span>
+        <span aria-hidden>·</span>
+        <a
+          href={GITHUB_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+        >
+          GitHub
+          <ArrowRight className="size-3" />
+        </a>
       </footer>
     </div>
   )

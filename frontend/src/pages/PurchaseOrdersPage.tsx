@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { motion } from "framer-motion"
-import { Search } from "lucide-react"
+import { ArrowRight, Search } from "lucide-react"
 
 import { PageHeader } from "@/components/shared/PageHeader"
 import { Input } from "@/components/ui/input"
@@ -12,6 +12,7 @@ import { NoData } from "@/components/shared/illustrations/NoData"
 import { VendorBadge } from "@/components/shared/VendorBadge"
 import { ExportButton } from "@/components/shared/ExportButton"
 import { usePurchaseOrders } from "@/api/purchase-orders"
+import { usePOSheet } from "@/store/po"
 import { formatCurrency, formatDate } from "@/lib/format"
 import type { CsvColumn } from "@/lib/csv"
 import type { PurchaseOrderListItem } from "@/api/types"
@@ -30,6 +31,7 @@ const PO_COLUMNS: CsvColumn<PurchaseOrderListItem>[] = [
 export function PurchaseOrdersPage() {
   const [search, setSearch] = useState("")
   const { data, isLoading } = usePurchaseOrders()
+  const openSheet = usePOSheet((s) => s.open)
 
   const filtered = data?.filter((po) => {
     if (!search) return true
@@ -45,7 +47,7 @@ export function PurchaseOrdersPage() {
     <div className="space-y-8">
       <PageHeader
         title="Purchase Orders"
-        description="All purchase orders that the matcher agent uses for invoice reconciliation."
+        description="Reference data the matcher agent uses to reconcile incoming invoices. In production these typically sync from your ERP; here you can seed sample data, import via CSV, or manage them directly."
         actions={
           <ExportButton
             data={data}
@@ -87,6 +89,7 @@ export function PurchaseOrdersPage() {
                 <th className="px-5 py-3">Issue Date</th>
                 <th className="px-5 py-3">Total</th>
                 <th className="px-5 py-3">Status</th>
+                <th className="px-5 py-3 w-10" />
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
@@ -96,14 +99,15 @@ export function PurchaseOrdersPage() {
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.02 }}
-                  className="hover:bg-accent/30 transition-colors"
+                  onClick={() => openSheet(po.id)}
+                  className="hover:bg-accent/30 transition-colors cursor-pointer group"
                 >
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-2">
                       <span className="font-mono font-medium">{po.po_number}</span>
                     </div>
                   </td>
-                  <td className="px-5 py-3.5">
+                  <td className="px-5 py-3.5" onClick={(e) => e.stopPropagation()}>
                     <VendorBadge vendorId={po.vendor_id} />
                   </td>
                   <td className="px-5 py-3.5 text-muted-foreground">
@@ -126,6 +130,9 @@ export function PurchaseOrdersPage() {
                     >
                       {po.status}
                     </Badge>
+                  </td>
+                  <td className="px-5 py-3.5 text-right">
+                    <ArrowRight className="size-4 text-muted-foreground/40 group-hover:text-foreground/70 transition-colors" />
                   </td>
                 </motion.tr>
               ))}

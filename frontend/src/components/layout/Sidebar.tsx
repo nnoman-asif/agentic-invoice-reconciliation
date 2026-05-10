@@ -7,6 +7,7 @@ import {
   Workflow,
   Sparkles,
   ShoppingCart,
+  Building2,
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
@@ -31,6 +32,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Invoice Inbox", icon: Inbox, to: ROUTES.inbox },
   { label: "Exceptions", icon: AlertTriangle, to: ROUTES.exceptions },
   { label: "Purchase Orders", icon: ShoppingCart, to: ROUTES.purchaseOrders },
+  { label: "Vendors", icon: Building2, to: ROUTES.vendors },
 ]
 
 const SHOWCASE_ITEMS: NavItem[] = [

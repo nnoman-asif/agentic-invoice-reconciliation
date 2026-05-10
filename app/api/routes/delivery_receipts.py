@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -16,12 +16,19 @@ router = APIRouter()
 
 
 @router.get("/delivery-receipts", response_model=list[DeliveryReceiptResponse])
-async def list_delivery_receipts(db: AsyncSession = Depends(get_db)):
+async def list_delivery_receipts(
+    po_id: uuid.UUID | None = Query(
+        None, description="Filter to receipts for a specific purchase order"
+    ),
+    db: AsyncSession = Depends(get_db),
+):
     stmt = (
         select(DeliveryReceipt)
         .options(selectinload(DeliveryReceipt.line_items))
         .order_by(DeliveryReceipt.created_at.desc())
     )
+    if po_id is not None:
+        stmt = stmt.where(DeliveryReceipt.po_id == po_id)
     result = await db.execute(stmt)
     return result.scalars().unique().all()
 

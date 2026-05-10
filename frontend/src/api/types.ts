@@ -118,6 +118,21 @@ export interface PurchaseOrder extends PurchaseOrderListItem {
   line_items: POLineItem[]
 }
 
+/**
+ * Compact view of an invoice that has reconciled against a PO.
+ * Used by the PO detail sheet's "Matched Invoices" tab.
+ */
+export interface MatchedInvoiceForPO {
+  invoice_id: string
+  invoice_number: string | null
+  business_status: string
+  total_amount: number | null
+  reconciliation_id: string
+  match_type: string
+  overall_status: string
+  discrepancies_count: number
+}
+
 export interface DeliveryReceipt {
   id: string
   receipt_number: string

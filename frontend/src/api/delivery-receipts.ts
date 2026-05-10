@@ -4,19 +4,27 @@ import type { DeliveryReceipt } from "./types"
 
 export const drKeys = {
   all: ["delivery-receipts"] as const,
-  list: () => [...drKeys.all, "list"] as const,
+  list: (poId?: string) => [...drKeys.all, "list", poId ?? null] as const,
   detail: (id: string) => [...drKeys.all, "detail", id] as const,
 }
 
-export function useDeliveryReceipts() {
+interface UseDeliveryReceiptsOptions {
+  poId?: string | null
+  enabled?: boolean
+}
+
+export function useDeliveryReceipts(opts: UseDeliveryReceiptsOptions = {}) {
+  const { poId, enabled = true } = opts
   return useQuery({
-    queryKey: drKeys.list(),
+    queryKey: drKeys.list(poId ?? undefined),
     queryFn: async () => {
-      const { data } = await apiClient.get<DeliveryReceipt[]>(
-        "/api/delivery-receipts"
-      )
+      const url = poId
+        ? `/api/delivery-receipts?po_id=${encodeURIComponent(poId)}`
+        : "/api/delivery-receipts"
+      const { data } = await apiClient.get<DeliveryReceipt[]>(url)
       return data
     },
+    enabled,
   })
 }
 
