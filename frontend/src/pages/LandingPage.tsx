@@ -113,7 +113,7 @@ export function LandingPage() {
             , in seconds.
           </h1>
           <p className="mt-6 max-w-2xl mx-auto text-lg text-muted-foreground text-balance">
-            Drop in an invoice PDF — agents parse it, three-way match against
+            Drop in an invoice PDF - agents parse it, three-way match against
             your purchase orders and delivery receipts, surface only the
             exceptions worth your time, and learn from every decision you
             make.
