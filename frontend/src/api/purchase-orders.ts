@@ -1,6 +1,7 @@
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiClient } from "./client"
 import type {
+  ImportResponse,
   MatchedInvoiceForPO,
   PurchaseOrder,
   PurchaseOrderListItem,
@@ -48,5 +49,25 @@ export function usePurchaseOrderInvoices(id: string | undefined | null) {
       return data
     },
     enabled: !!id,
+  })
+}
+
+/** Upload a CSV file to bulk-create purchase orders. */
+export function useImportPOsCsv() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const form = new FormData()
+      form.append("file", file)
+      const { data } = await apiClient.post<ImportResponse>(
+        "/api/purchase-orders/import",
+        form,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      )
+      return data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: poKeys.all })
+    },
   })
 }

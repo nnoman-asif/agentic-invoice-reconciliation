@@ -133,6 +133,26 @@ export interface MatchedInvoiceForPO {
   discrepancies_count: number
 }
 
+/** Per-row result from a bulk CSV import. */
+export interface ImportRowResult {
+  row: number
+  identifier: string | null
+  reason: string | null
+  id: string | null
+}
+
+/**
+ * Partial-success result for a CSV import endpoint.
+ *
+ * `imported` succeeded, `skipped` are non-fatal (already exists,
+ * duplicate within the file), and `errors` need user attention.
+ */
+export interface ImportResponse {
+  imported: ImportRowResult[]
+  skipped: ImportRowResult[]
+  errors: ImportRowResult[]
+}
+
 export interface DeliveryReceipt {
   id: string
   receipt_number: string

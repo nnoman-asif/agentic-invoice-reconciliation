@@ -1,0 +1,5 @@
+po_number,vendor_code,issue_date,expected_delivery_date,currency,notes,line_number,item_code,item_description,quantity,unit_price,unit_of_measure
+PO-2026-101,ACME-001,2026-03-01,2026-03-15,USD,Q2 hardware order,1,BOLT-M10X60,Steel Bolts M10x60mm Grade 8.8,400,7.50,pcs
+PO-2026-101,ACME-001,2026-03-01,2026-03-15,USD,Q2 hardware order,2,WASH-M10,Flat Washers M10 Stainless Steel,800,0.45,pcs
+PO-2026-102,GSC-002,2026-03-05,2026-03-20,USD,Steel sheet replenishment,1,SHEET-CR-2MM,Cold Rolled Steel Sheet 2mm 1m x 2m,30,185.00,sheets
+PO-2026-102,GSC-002,2026-03-05,2026-03-20,USD,Steel sheet replenishment,2,SHEET-CR-3MM,Cold Rolled Steel Sheet 3mm 1m x 2m,15,265.00,sheets

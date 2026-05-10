@@ -9,7 +9,12 @@ import { TableSkeleton } from "@/components/shared/LoadingSkeleton"
 import { EmptyState } from "@/components/shared/EmptyState"
 import { NoData } from "@/components/shared/illustrations/NoData"
 import { ExportButton } from "@/components/shared/ExportButton"
-import { useVendors, type Vendor } from "@/api/vendors"
+import { ImportButton } from "@/components/shared/ImportButton"
+import {
+  useImportVendorsCsv,
+  useVendors,
+  type Vendor,
+} from "@/api/vendors"
 import { useVendorSheet } from "@/store/vendor"
 import type { CsvColumn } from "@/lib/csv"
 
@@ -27,6 +32,7 @@ export function VendorsPage() {
   const [search, setSearch] = useState("")
   const { data, isLoading } = useVendors()
   const openSheet = useVendorSheet((s) => s.open)
+  const importMutation = useImportVendorsCsv()
 
   const filtered = data?.filter((v) => {
     if (!search) return true
@@ -45,11 +51,18 @@ export function VendorsPage() {
         title="Vendors"
         description="The companies your invoices and purchase orders reference. The matcher agent looks vendors up by tax ID first, then by name. Vendors must exist before their POs or invoices can be reconciled."
         actions={
-          <ExportButton
-            data={data}
-            columns={VENDOR_COLUMNS}
-            filenamePrefix="vendors"
-          />
+          <>
+            <ImportButton
+              entity="vendors"
+              templateUrl="/samples/vendors-template.csv"
+              importMutation={importMutation}
+            />
+            <ExportButton
+              data={data}
+              columns={VENDOR_COLUMNS}
+              filenamePrefix="vendors"
+            />
+          </>
         }
       />
 

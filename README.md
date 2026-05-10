@@ -244,12 +244,51 @@ curl -X POST http://localhost:8000/api/exceptions/{reconciliation_id}/reject \
 # List purchase orders
 curl http://localhost:8000/api/purchase-orders
 
+# List vendors
+curl http://localhost:8000/api/vendors
+
 # Dashboard stats
 curl http://localhost:8000/api/dashboard/stats
 
 # Health check
 curl http://localhost:8000/health
 ```
+
+### Bulk CSV Imports
+
+Both purchase orders and vendors can be loaded in bulk from a CSV
+file. Use the **Import CSV** button on the Purchase Orders or Vendors
+page in the UI, or call the endpoints directly. Both return HTTP 200
+with `{imported, skipped, errors}` so partial success is supported —
+only an unparseable file returns 400.
+
+**Purchase orders** — one row per *line item*; rows sharing a
+`po_number` are grouped into a single PO. PO-level columns must be
+identical within each group; the total amount is computed from the
+line items.
+
+```
+po_number,vendor_code,issue_date,expected_delivery_date,currency,notes,line_number,item_code,item_description,quantity,unit_price,unit_of_measure
+```
+
+```bash
+curl -X POST http://localhost:8000/api/purchase-orders/import \
+  -F "file=@frontend/public/samples/purchase-orders-template.csv"
+```
+
+**Vendors** — one row per vendor. Only `code` and `name` are required.
+
+```
+code,name,tax_id,address,contact_email
+```
+
+```bash
+curl -X POST http://localhost:8000/api/vendors/import \
+  -F "file=@frontend/public/samples/vendors-template.csv"
+```
+
+Sample templates live in [`frontend/public/samples/`](frontend/public/samples)
+and are also reachable inside the app from the Import dialog.
 
 ### Webhook
 

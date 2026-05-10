@@ -1,6 +1,10 @@
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiClient } from "./client"
-import type { InvoiceListItem, PurchaseOrderListItem } from "./types"
+import type {
+  ImportResponse,
+  InvoiceListItem,
+  PurchaseOrderListItem,
+} from "./types"
 
 export interface Vendor {
   id: string
@@ -89,5 +93,25 @@ export function useVendorStats(id: string | undefined | null) {
       return data
     },
     enabled: !!id,
+  })
+}
+
+/** Upload a CSV file to bulk-create vendors. */
+export function useImportVendorsCsv() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const form = new FormData()
+      form.append("file", file)
+      const { data } = await apiClient.post<ImportResponse>(
+        "/api/vendors/import",
+        form,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      )
+      return data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: vendorKeys.all })
+    },
   })
 }

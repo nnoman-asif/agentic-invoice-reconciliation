@@ -186,6 +186,37 @@ class MatchedInvoiceForPO(BaseModel):
     discrepancies_count: int
 
 
+# ── CSV Import ─────────────────────────────────────────────────────
+
+class ImportRowResult(BaseModel):
+    """One row's outcome from a CSV import.
+
+    `row` is the 1-indexed line number in the original CSV (header is
+    row 1, so the first data row is row 2). For the PO importer where
+    multiple CSV rows produce one PO, `row` points to the *first* line
+    of the group. `identifier` is whatever natural key the user can
+    find in their CSV (po_number, vendor code, …).
+    """
+    row: int
+    identifier: str | None = None
+    reason: str | None = None
+    id: uuid.UUID | None = None
+
+
+class ImportResponse(BaseModel):
+    """Partial-success result for a CSV import.
+
+    `imported` are the rows we created, `skipped` are non-fatal cases
+    (already exists, duplicate within the file), and `errors` are
+    actual failures that need user attention. The endpoint returns
+    HTTP 200 even with non-empty errors so the UI can surface details
+    without a network-level failure.
+    """
+    imported: list[ImportRowResult] = []
+    skipped: list[ImportRowResult] = []
+    errors: list[ImportRowResult] = []
+
+
 # ── Delivery Receipt ──────────────────────────────────────────────
 
 class DeliveryLineItemCreate(BaseModel):

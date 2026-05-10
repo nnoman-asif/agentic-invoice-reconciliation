@@ -11,7 +11,8 @@ import { EmptyState } from "@/components/shared/EmptyState"
 import { NoData } from "@/components/shared/illustrations/NoData"
 import { VendorBadge } from "@/components/shared/VendorBadge"
 import { ExportButton } from "@/components/shared/ExportButton"
-import { usePurchaseOrders } from "@/api/purchase-orders"
+import { ImportButton } from "@/components/shared/ImportButton"
+import { useImportPOsCsv, usePurchaseOrders } from "@/api/purchase-orders"
 import { usePOSheet } from "@/store/po"
 import { formatCurrency, formatDate } from "@/lib/format"
 import type { CsvColumn } from "@/lib/csv"
@@ -32,6 +33,7 @@ export function PurchaseOrdersPage() {
   const [search, setSearch] = useState("")
   const { data, isLoading } = usePurchaseOrders()
   const openSheet = usePOSheet((s) => s.open)
+  const importMutation = useImportPOsCsv()
 
   const filtered = data?.filter((po) => {
     if (!search) return true
@@ -49,11 +51,18 @@ export function PurchaseOrdersPage() {
         title="Purchase Orders"
         description="Reference data the matcher agent uses to reconcile incoming invoices. In production these typically sync from your ERP; here you can seed sample data, import via CSV, or manage them directly."
         actions={
-          <ExportButton
-            data={data}
-            columns={PO_COLUMNS}
-            filenamePrefix="purchase-orders"
-          />
+          <>
+            <ImportButton
+              entity="purchase orders"
+              templateUrl="/samples/purchase-orders-template.csv"
+              importMutation={importMutation}
+            />
+            <ExportButton
+              data={data}
+              columns={PO_COLUMNS}
+              filenamePrefix="purchase-orders"
+            />
+          </>
         }
       />
 
