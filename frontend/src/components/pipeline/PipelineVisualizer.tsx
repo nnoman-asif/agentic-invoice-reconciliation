@@ -25,29 +25,38 @@ export function PipelineVisualizer({ pipeline }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* Pipeline canvas */}
+      {/* Pipeline canvas. The inner row enforces a min-width that keeps
+          bubbles and labels from crushing into each other; on narrow
+          viewports the card becomes horizontally scrollable instead
+          (`overflow-x-auto` on the wrapper) so all four agents stay
+          legible regardless of screen size. */}
       <Card className="relative overflow-hidden">
         <div className="absolute inset-0 gradient-mesh opacity-50 pointer-events-none" />
-        <CardContent className="relative py-12 px-8">
-          <div className="flex items-center justify-between gap-2 max-w-3xl mx-auto">
-            {stages.map((stage, idx) => (
-              <div key={stage.id} className="flex items-center flex-1">
-                <AgentNode
-                  stage={stage}
-                  active={selected === stage.id}
-                  onClick={() => setSelected(stage.id)}
-                />
-                {idx < stages.length - 1 && (
-                  <AnimatedEdge
-                    completed={stage.status === "completed"}
-                    active={
-                      stage.status === "completed" &&
-                      stages[idx + 1].status === "running"
-                    }
+        <CardContent className="relative py-8 px-3 sm:py-12 sm:px-8">
+          <div className="overflow-x-auto -mx-3 sm:mx-0">
+            <div className="flex items-center justify-between gap-2 max-w-3xl mx-auto min-w-[440px] sm:min-w-0 px-3 sm:px-0">
+              {stages.map((stage, idx) => (
+                <div
+                  key={stage.id}
+                  className="flex items-center flex-1 min-w-0"
+                >
+                  <AgentNode
+                    stage={stage}
+                    active={selected === stage.id}
+                    onClick={() => setSelected(stage.id)}
                   />
-                )}
-              </div>
-            ))}
+                  {idx < stages.length - 1 && (
+                    <AnimatedEdge
+                      completed={stage.status === "completed"}
+                      active={
+                        stage.status === "completed" &&
+                        stages[idx + 1].status === "running"
+                      }
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Pipeline metadata */}

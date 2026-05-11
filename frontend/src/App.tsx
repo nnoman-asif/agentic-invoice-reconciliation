@@ -126,6 +126,12 @@ function useGlobalShortcuts() {
         handler: () => navigate(ROUTES.purchaseOrders),
       },
       {
+        keys: "g v",
+        description: "Go to Vendors",
+        category: "Navigation",
+        handler: () => navigate(ROUTES.vendors),
+      },
+      {
         keys: "g l",
         description: "Go to Pipeline",
         category: "Navigation",
