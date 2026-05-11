@@ -1,6 +1,5 @@
 import { useMemo } from "react"
 import { Routes, Route, useLocation, useNavigate } from "react-router-dom"
-import { AnimatePresence } from "framer-motion"
 
 import { AppShell } from "@/components/layout/AppShell"
 import { CommandPalette } from "@/components/layout/CommandPalette"
@@ -43,6 +42,13 @@ export default function App() {
   //   * This inner boundary is keyed by route path so a page-level crash
   //     resets the moment the user navigates somewhere else, instead of
   //     leaving them stuck on the fallback screen forever.
+  //
+  // Note on AnimatePresence: an earlier revision wrapped these routes in
+  // <AnimatePresence mode="wait"> for page exit animations. None of the
+  // pages actually define an `exit` prop, though, so the wait mode would
+  // hang indefinitely waiting for an exit that never fires -- the
+  // observable symptom was the URL changing to e.g. /invoices while the
+  // previous page (Vendors) stayed mounted. Removed.
   return (
     <>
       <PageLoadingBar />
@@ -50,34 +56,32 @@ export default function App() {
       <ShortcutsOverlay />
       <VendorSheet />
       <POSheet />
-      <AnimatePresence mode="wait">
-        <ErrorBoundary key={location.pathname}>
-          <Routes location={location}>
-            <Route path={ROUTES.landing} element={<LandingPage />} />
+      <ErrorBoundary key={location.pathname}>
+        <Routes location={location}>
+          <Route path={ROUTES.landing} element={<LandingPage />} />
 
-            <Route element={<AppShell />}>
-              <Route path={ROUTES.dashboard} element={<DashboardPage />} />
-              <Route path={ROUTES.inbox} element={<InboxPage />} />
-              <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
-              <Route
-                path="/invoices/:id/compare"
-                element={<CompareViewPage />}
-              />
-              <Route path={ROUTES.pipeline} element={<PipelinePage />} />
-              <Route path={ROUTES.flow} element={<FlowPage />} />
-              <Route path={ROUTES.exceptions} element={<ExceptionsPage />} />
-              <Route
-                path={ROUTES.purchaseOrders}
-                element={<PurchaseOrdersPage />}
-              />
-              <Route path={ROUTES.vendors} element={<VendorsPage />} />
-              <Route path={ROUTES.settings} element={<SettingsPage />} />
-            </Route>
+          <Route element={<AppShell />}>
+            <Route path={ROUTES.dashboard} element={<DashboardPage />} />
+            <Route path={ROUTES.inbox} element={<InboxPage />} />
+            <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
+            <Route
+              path="/invoices/:id/compare"
+              element={<CompareViewPage />}
+            />
+            <Route path={ROUTES.pipeline} element={<PipelinePage />} />
+            <Route path={ROUTES.flow} element={<FlowPage />} />
+            <Route path={ROUTES.exceptions} element={<ExceptionsPage />} />
+            <Route
+              path={ROUTES.purchaseOrders}
+              element={<PurchaseOrdersPage />}
+            />
+            <Route path={ROUTES.vendors} element={<VendorsPage />} />
+            <Route path={ROUTES.settings} element={<SettingsPage />} />
+          </Route>
 
-            <Route path="*" element={<NotFoundPage />} />
-          </Routes>
-        </ErrorBoundary>
-      </AnimatePresence>
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </ErrorBoundary>
     </>
   )
 }
