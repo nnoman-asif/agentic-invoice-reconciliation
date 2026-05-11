@@ -51,8 +51,12 @@ export function Sidebar() {
       transition={{ type: "spring", stiffness: 380, damping: 30 }}
       className="sticky top-0 h-screen flex flex-col border-r border-border/60 bg-background/60 backdrop-blur-2xl"
     >
-      {/* Logo */}
-      <div className="flex items-center gap-3 px-4 h-16 border-b border-border/60">
+      {/* Logo -- doubles as a "go home" link to the landing page */}
+      <NavLink
+        to={ROUTES.landing}
+        aria-label="Back to landing page"
+        className="flex items-center gap-3 px-4 h-16 border-b border-border/60 hover:bg-accent/30 transition-colors"
+      >
         <div className="size-9 shrink-0 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-glow">
           <FileSearch className="size-4 text-white" />
         </div>
@@ -68,7 +72,7 @@ export function Sidebar() {
             </span>
           </motion.div>
         )}
-      </div>
+      </NavLink>
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-6 overflow-y-auto">

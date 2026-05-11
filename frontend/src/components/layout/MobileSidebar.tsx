@@ -68,17 +68,21 @@ export function MobileSidebar() {
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetContent side="left" className="p-0 w-[280px] sm:w-[300px]">
         <SheetHeader>
-          <div className="flex items-center gap-3">
+          <NavLink
+            to={ROUTES.landing}
+            aria-label="Back to landing page"
+            className="flex items-center gap-3 -mx-2 px-2 py-1 rounded-lg hover:bg-accent/30 transition-colors"
+          >
             <div className="size-9 shrink-0 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-glow">
               <FileSearch className="size-4 text-white" />
             </div>
-            <div className="flex flex-col leading-tight">
+            <div className="flex flex-col leading-tight text-left">
               <SheetTitle className="text-sm">Reconciliation</SheetTitle>
               <SheetDescription className="text-[11px]">
                 Agentic AI
               </SheetDescription>
             </div>
-          </div>
+          </NavLink>
         </SheetHeader>
 
         <nav className="flex-1 px-3 py-4 space-y-6 overflow-y-auto">
