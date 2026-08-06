@@ -1,5 +1,6 @@
 import csv
 import io
+import logging
 import uuid
 from datetime import date, datetime
 
@@ -27,6 +28,31 @@ from app.models.schemas import (
     PurchaseOrderResponse,
     PurchaseOrderUpdate,
 )
+from app.tools.embeddings import get_embeddings_batch
+
+logger = logging.getLogger(__name__)
+
+
+def _embed_po_lines(lines: list[POLineItem]) -> None:
+    """Batch-embed line descriptions onto `description_embedding`.
+
+    On failure, leaves embeddings as NULL and logs a warning so PO
+    writes still succeed; the matcher will fill the cache later.
+    """
+    if not lines:
+        return
+    try:
+        vectors = get_embeddings_batch([li.item_description for li in lines])
+        for li, vec in zip(lines, vectors):
+            li.description_embedding = vec
+    except Exception as e:
+        logger.warning(
+            "[PO] Failed to embed %d line description(s): %s",
+            len(lines),
+            e,
+        )
+        for li in lines:
+            li.description_embedding = None
 
 PO_IMPORT_REQUIRED_COLUMNS = (
     "po_number",
@@ -130,6 +156,7 @@ async def create_purchase_order(
     db.add(po)
     await db.flush()
 
+    lines: list[POLineItem] = []
     for item in data.line_items:
         line = POLineItem(
             po_id=po.id,
@@ -142,7 +169,10 @@ async def create_purchase_order(
             unit_of_measure=item.unit_of_measure,
         )
         db.add(line)
+        lines.append(line)
 
+    await db.flush()
+    _embed_po_lines(lines)
     await db.flush()
 
     stmt = (
@@ -223,30 +253,37 @@ async def update_purchase_order(
             )
 
         existing_by_line = {li.line_number: li for li in po.line_items}
+        lines_to_embed: list[POLineItem] = []
 
         for item in data.line_items:
             existing = existing_by_line.get(item.line_number)
             if existing is not None:
+                desc_changed = (
+                    (existing.item_description or "")
+                    != (item.item_description or "")
+                )
                 existing.item_code = item.item_code
                 existing.item_description = item.item_description
                 existing.quantity = item.quantity
                 existing.unit_price = item.unit_price
                 existing.total_price = item.total_price
                 existing.unit_of_measure = item.unit_of_measure
+                if desc_changed:
+                    lines_to_embed.append(existing)
             else:
                 # Append via the relationship so the collection (and
                 # the response payload) reflects it without a refetch.
-                po.line_items.append(
-                    POLineItem(
-                        line_number=item.line_number,
-                        item_code=item.item_code,
-                        item_description=item.item_description,
-                        quantity=item.quantity,
-                        unit_price=item.unit_price,
-                        total_price=item.total_price,
-                        unit_of_measure=item.unit_of_measure,
-                    )
+                new_line = POLineItem(
+                    line_number=item.line_number,
+                    item_code=item.item_code,
+                    item_description=item.item_description,
+                    quantity=item.quantity,
+                    unit_price=item.unit_price,
+                    total_price=item.total_price,
+                    unit_of_measure=item.unit_of_measure,
                 )
+                po.line_items.append(new_line)
+                lines_to_embed.append(new_line)
 
         # Remove rows no longer in the payload via the relationship —
         # cascade="all, delete-orphan" turns each remove() into a DELETE.
@@ -258,6 +295,8 @@ async def update_purchase_order(
         po.total_amount = round(
             sum(float(it.total_price) for it in data.line_items), 2
         )
+
+        _embed_po_lines(lines_to_embed)
 
     await db.flush()
 
@@ -415,6 +454,9 @@ async def import_purchase_orders_csv(
     )
     existing_po_numbers = {pn for pn in existing_q.scalars()}
 
+    # Validate and build POs first; embed once for the whole file; then insert.
+    prepared: list[tuple[PurchaseOrder, list[POLineItem], ImportRowResult]] = []
+
     for po_number, group in groups.items():
         first_row = group["first_row"]
         rows = group["rows"]
@@ -525,6 +567,12 @@ async def import_purchase_orders_csv(
             currency=currency,
             notes=notes,
         )
+        prepared.append((po, line_items, result))
+
+    all_lines = [li for _, lines, _ in prepared for li in lines]
+    _embed_po_lines(all_lines)
+
+    for po, line_items, result in prepared:
         db.add(po)
         await db.flush()
         for li in line_items:
