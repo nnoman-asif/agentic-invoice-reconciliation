@@ -2,8 +2,10 @@
 
 from dataclasses import dataclass
 
+import numpy as np
+
 from app.config import settings
-from app.tools.embeddings import cosine_similarity, get_embedding
+from app.tools.embeddings import cosine_similarity_matrix, get_embeddings_batch
 
 
 @dataclass
@@ -19,13 +21,6 @@ class LineMatchResult:
     price_invoiced: float | None = None
     price_ordered: float | None = None
     price_deviation_pct: float | None = None
-
-
-def compute_description_similarity(desc_a: str, desc_b: str) -> float:
-    """Compute semantic similarity between two item descriptions using embeddings."""
-    emb_a = get_embedding(desc_a)
-    emb_b = get_embedding(desc_b)
-    return cosine_similarity(emb_a, emb_b)
 
 
 def compute_price_deviation(price_a: float, price_b: float) -> float:
@@ -46,6 +41,7 @@ def match_line_items(
 
     Each dict must have: id, item_description, item_code (optional), quantity, unit_price
     Delivery lines also need: po_line_item_id, quantity_accepted
+    PO lines may include description_embedding (cached vector) to avoid re-embedding.
     """
     results: list[LineMatchResult] = []
     used_po_ids: set[str] = set()
@@ -57,28 +53,89 @@ def match_line_items(
         if key:
             delivery_by_po_line.setdefault(str(key), []).append(dl)
 
-    for inv_line in invoice_lines:
+    n = len(invoice_lines)
+    m = len(po_lines)
+    if n == 0:
+        return results
+
+    # One batch for all invoice descriptions, plus any PO lines that
+    # arrived without a cached embedding (matcher should have filled
+    # those already; this is a defensive fallback).
+    texts: list[str] = [inv.get("item_description", "") for inv in invoice_lines]
+    po_uncached_indices: list[int] = []
+    for j, po in enumerate(po_lines):
+        if po.get("description_embedding") is None:
+            po_uncached_indices.append(j)
+            texts.append(po.get("item_description", ""))
+
+    vectors: list[list[float]] = []
+    if texts:
+        try:
+            vectors = get_embeddings_batch(texts)
+        except Exception:
+            # Leave vectors empty; sim stays 0.0 except exact item_code hits.
+            vectors = []
+
+    inv_embeddings: list[list[float] | None] = [None] * n
+    po_embeddings: list[list[float] | None] = [
+        list(po["description_embedding"])
+        if po.get("description_embedding") is not None
+        else None
+        for po in po_lines
+    ]
+
+    if len(vectors) >= n:
+        for i in range(n):
+            inv_embeddings[i] = vectors[i]
+        for offset, j in enumerate(po_uncached_indices):
+            idx = n + offset
+            if idx < len(vectors):
+                po_embeddings[j] = vectors[idx]
+
+    # N x M similarity: 1.0 for exact item_code match, cosine otherwise,
+    # 0.0 when a vector is unavailable.
+    sim = np.zeros((n, m), dtype=float)
+    inv_rows: list[list[float]] = []
+    inv_row_map: list[int] = []
+    for i, emb in enumerate(inv_embeddings):
+        if emb is not None:
+            inv_rows.append(emb)
+            inv_row_map.append(i)
+
+    po_rows: list[list[float]] = []
+    po_row_map: list[int] = []
+    for j, emb in enumerate(po_embeddings):
+        if emb is not None:
+            po_rows.append(emb)
+            po_row_map.append(j)
+
+    if inv_rows and po_rows:
+        matrix = cosine_similarity_matrix(
+            np.asarray(inv_rows, dtype=float),
+            np.asarray(po_rows, dtype=float),
+        )
+        for ri, i in enumerate(inv_row_map):
+            for rj, j in enumerate(po_row_map):
+                sim[i, j] = float(matrix[ri, rj])
+
+    for i, inv_line in enumerate(invoice_lines):
+        inv_code = (inv_line.get("item_code") or "").strip().upper()
+        if not inv_code:
+            continue
+        for j, po_line in enumerate(po_lines):
+            po_code = (po_line.get("item_code") or "").strip().upper()
+            if po_code and inv_code == po_code:
+                sim[i, j] = 1.0
+
+    for i, inv_line in enumerate(invoice_lines):
         best_match: LineMatchResult | None = None
         best_score = -1.0
 
-        for po_line in po_lines:
+        for j, po_line in enumerate(po_lines):
             if str(po_line["id"]) in used_po_ids:
                 continue
 
-            # Try exact item_code match first
-            if inv_line.get("item_code") and po_line.get("item_code"):
-                if inv_line["item_code"].strip().upper() == po_line["item_code"].strip().upper():
-                    similarity = 1.0
-                else:
-                    similarity = compute_description_similarity(
-                        inv_line["item_description"],
-                        po_line["item_description"],
-                    )
-            else:
-                similarity = compute_description_similarity(
-                    inv_line["item_description"],
-                    po_line["item_description"],
-                )
+            similarity = float(sim[i, j])
 
             if similarity > best_score and similarity >= similarity_threshold:
                 # Find corresponding delivery

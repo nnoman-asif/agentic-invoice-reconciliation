@@ -13,6 +13,7 @@ from app.tools.db_queries import (
     find_purchase_orders_by_vendor,
     find_vendor_by_name_or_tax_id,
 )
+from app.tools.embeddings import get_embeddings_batch
 from app.tools.matching_logic import match_line_items
 
 logger = logging.getLogger(__name__)
@@ -85,6 +86,23 @@ async def match_records(state: dict) -> dict:
         "total_amount": float(matched_po.total_amount),
         "issue_date": str(matched_po.issue_date),
     }
+
+    # Cache missing PO description embeddings in one batch so the matcher
+    # can score without re-embedding the same PO lines on every invoice.
+    missing = [li for li in matched_po.line_items if li.description_embedding is None]
+    if missing:
+        try:
+            vectors = get_embeddings_batch([li.item_description for li in missing])
+            for li, vec in zip(missing, vectors):
+                li.description_embedding = vec
+            await db.flush()
+        except Exception as e:
+            logger.warning(
+                "[MatcherAgent] Failed to cache PO embeddings for invoice %s: %s",
+                invoice_id,
+                e,
+            )
+
     po_lines = [
         {
             "id": str(li.id),
@@ -94,6 +112,11 @@ async def match_records(state: dict) -> dict:
             "quantity": float(li.quantity),
             "unit_price": float(li.unit_price),
             "total_price": float(li.total_price),
+            "description_embedding": (
+                list(li.description_embedding)
+                if li.description_embedding is not None
+                else None
+            ),
         }
         for li in matched_po.line_items
     ]
