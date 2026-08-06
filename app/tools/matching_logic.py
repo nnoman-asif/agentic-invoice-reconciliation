@@ -1,11 +1,9 @@
 """3-way matching logic for invoice line items against PO and delivery data."""
 
-from dataclasses import dataclass, field
-
-import numpy as np
-import ollama
+from dataclasses import dataclass
 
 from app.config import settings
+from app.tools.embeddings import cosine_similarity, get_embedding
 
 
 @dataclass
@@ -21,25 +19,6 @@ class LineMatchResult:
     price_invoiced: float | None = None
     price_ordered: float | None = None
     price_deviation_pct: float | None = None
-
-
-def get_embedding(text: str) -> list[float]:
-    """Get embedding from Ollama for a single text."""
-    response = ollama.embed(
-        model=settings.ollama_embedding_model,
-        input=text,
-    )
-    return response["embeddings"][0]
-
-
-def cosine_similarity(vec_a: list[float], vec_b: list[float]) -> float:
-    a = np.array(vec_a)
-    b = np.array(vec_b)
-    dot = np.dot(a, b)
-    norm = np.linalg.norm(a) * np.linalg.norm(b)
-    if norm == 0:
-        return 0.0
-    return float(dot / norm)
 
 
 def compute_description_similarity(desc_a: str, desc_b: str) -> float:

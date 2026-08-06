@@ -86,6 +86,11 @@ class POLineItem(Base):
     unit_price: Mapped[float] = mapped_column(DECIMAL(15, 2), nullable=False)
     total_price: Mapped[float] = mapped_column(DECIMAL(15, 2), nullable=False)
     unit_of_measure: Mapped[str | None] = mapped_column(String(20))
+    # Cached embedding of `item_description`. Fetched by po_id, never
+    # searched by similarity — no HNSW index. Dimension must stay in
+    # lockstep with reconciliation_embeddings.embedding; changing the
+    # embedding provider requires migrating both columns.
+    description_embedding: Mapped[list[float] | None] = mapped_column(Vector(1024), nullable=True)
 
     purchase_order: Mapped["PurchaseOrder"] = relationship(back_populates="line_items")
 

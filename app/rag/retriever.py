@@ -6,7 +6,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.database import ReconciliationEmbedding, HumanReview
-from app.rag.embeddings import get_embedding
+from app.tools.embeddings import get_embedding
 
 logger = logging.getLogger(__name__)
 

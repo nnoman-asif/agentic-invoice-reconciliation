@@ -66,15 +66,16 @@ CREATE INDEX IF NOT EXISTS idx_po_status    ON purchase_orders (status);
 -- 3. po_line_items
 -- ============================================================
 CREATE TABLE IF NOT EXISTS po_line_items (
-    id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    po_id            UUID           NOT NULL,
-    line_number      INTEGER        NOT NULL,
-    item_code        VARCHAR(100),
-    item_description VARCHAR(500)   NOT NULL,
-    quantity         DECIMAL(12,3)  NOT NULL,
-    unit_price       DECIMAL(15,2)  NOT NULL,
-    total_price      DECIMAL(15,2)  NOT NULL,
-    unit_of_measure  VARCHAR(20),
+    id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    po_id                 UUID           NOT NULL,
+    line_number           INTEGER        NOT NULL,
+    item_code             VARCHAR(100),
+    item_description      VARCHAR(500)   NOT NULL,
+    quantity              DECIMAL(12,3)  NOT NULL,
+    unit_price            DECIMAL(15,2)  NOT NULL,
+    total_price           DECIMAL(15,2)  NOT NULL,
+    unit_of_measure       VARCHAR(20),
+    description_embedding vector(1024),
 
     CONSTRAINT uq_po_line UNIQUE (po_id, line_number),
     CONSTRAINT fk_poli_po FOREIGN KEY (po_id)
@@ -298,6 +299,11 @@ CREATE TABLE IF NOT EXISTS reconciliation_embeddings (
 CREATE INDEX IF NOT EXISTS idx_re_rec_id ON reconciliation_embeddings (reconciliation_id);
 CREATE INDEX IF NOT EXISTS idx_re_embedding ON reconciliation_embeddings
     USING hnsw (embedding vector_cosine_ops);
+
+-- Idempotent migration: CREATE TABLE IF NOT EXISTS does not add
+-- columns to an existing table.
+ALTER TABLE po_line_items
+    ADD COLUMN IF NOT EXISTS description_embedding vector(1024);
 
 """
 
