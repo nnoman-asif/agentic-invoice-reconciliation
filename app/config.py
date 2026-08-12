@@ -50,8 +50,14 @@ class Settings(BaseSettings):
     upload_dir: str = "uploads/invoices"
     max_upload_size_mb: int = 10
 
-    # Auth (Commit 6 enables Firebase/guest; False = local-dev owner)
+    # Auth (false = local-dev owner; true = Firebase / guest tokens)
     auth_enabled: bool = False
+    firebase_project_id: str = ""
+    # Inline service-account JSON (preferred for PaaS). Alternatively set
+    # GOOGLE_APPLICATION_CREDENTIALS to a credentials file path.
+    firebase_credentials_json: str = ""
+    secret_key: str = "dev-only-change-me"
+    inactive_account_days: int = 7
 
     @property
     def database_url(self) -> str:

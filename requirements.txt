@@ -38,6 +38,10 @@ python-dotenv
 httpx
 tenacity
 numpy
+itsdangerous
+
+# Auth
+firebase-admin
 
 # Tests
 pytest

@@ -1,9 +1,7 @@
 """Tenant isolation regression tests.
 
-Test 1 audits that every /api data route depends on get_current_owner.
+Test 1 audits that every protected /api data route depends on get_current_owner.
 Test 2 checks cross-user reads cannot see another owner's resources.
-
-Until Commit 5 scopes the routes, both tests are expected to fail.
 """
 
 from __future__ import annotations
@@ -35,16 +33,21 @@ def _route_depends_on_owner(route: APIRoute) -> bool:
 
 
 def test_all_api_routes_require_owner_dependency():
-    """Fail if any /api data route forgets get_current_owner."""
+    """Fail if any protected /api data route forgets get_current_owner."""
+    # Public mint endpoint — intentionally unauthenticated.
+    public = {("POST", "/api/auth/guest")}
+
     missing: list[str] = []
     for route in app.routes:
         if not isinstance(route, APIRoute):
             continue
         if not route.path.startswith("/api"):
             continue
+        methods = route.methods - {"HEAD"}
+        if all((m, route.path) in public for m in methods):
+            continue
         if not _route_depends_on_owner(route):
-            methods = ",".join(sorted(route.methods - {"HEAD"}))
-            missing.append(f"{methods} {route.path}")
+            missing.append(f"{','.join(sorted(methods))} {route.path}")
 
     assert not missing, (
         "Routes missing get_current_owner dependency:\n  " + "\n  ".join(missing)

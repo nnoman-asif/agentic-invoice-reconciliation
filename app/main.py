@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.api.routes import (
+    auth,
     dashboard,
     delivery_receipts,
     exceptions,
@@ -17,6 +18,7 @@ from app.api.routes import (
     vendors,
 )
 from app.api.webhooks import invoice_webhook
+from app.auth.firebase import init_firebase
 
 
 @asynccontextmanager
@@ -25,6 +27,8 @@ async def lifespan(app: FastAPI):
         settings.redis_url,
         decode_responses=True,
     )
+    if settings.auth_enabled:
+        init_firebase()
     yield
     await app.state.redis.close()
 
@@ -55,6 +59,7 @@ uploads_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
 app.include_router(health.router, tags=["Health"])
+app.include_router(auth.router, prefix="/api", tags=["Auth"])
 app.include_router(invoices.router, prefix="/api", tags=["Invoices"])
 app.include_router(purchase_orders.router, prefix="/api", tags=["Purchase Orders"])
 app.include_router(delivery_receipts.router, prefix="/api", tags=["Delivery Receipts"])

@@ -457,3 +457,23 @@ class HealthResponse(BaseModel):
     postgres: str
     redis: str
     ollama: str
+
+
+# ── Auth ──────────────────────────────────────────────────────────
+
+class AuthMeResponse(BaseModel):
+    id: uuid.UUID
+    kind: str
+    email: str | None = None
+    display_name: str | None = None
+    daily_invoice_limit: int
+    max_upload_mb: int
+    max_pdf_pages: int
+    last_seen_at: datetime | None = None
+    created_at: datetime | None = None
+    scheduled_deletion_at: datetime | None = None
+
+
+class GuestAuthResponse(BaseModel):
+    guest_token: str
+    user: AuthMeResponse
