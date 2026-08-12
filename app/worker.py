@@ -93,6 +93,8 @@ async def worker_loop():
                         f"(not found after {MAX_NOT_FOUND_RETRIES} attempts)"
                     )
                     retry_counts.pop(invoice_id_str, None)
+                    # Best-effort slot release when we never loaded the row.
+                    # Owner is unknown here; orphaned slots expire via TTL.
             else:
                 # Unknown outcome -- treat as failure to avoid silent loss
                 retry_counts.pop(invoice_id_str, None)

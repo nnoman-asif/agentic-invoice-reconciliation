@@ -75,6 +75,14 @@ class Settings(BaseSettings):
     # Only trust CF-Connecting-IP when the app sits behind the Cloudflare Worker.
     trust_proxy_header: bool = False
 
+    # Rate limits / queue fairness (Commit 12)
+    upload_rate_per_minute: int = 3
+    max_inflight_per_user: int = 1
+    # Safety TTL so a crashed worker cannot permanently hold a slot.
+    inflight_ttl_seconds: int = 3600
+    provider_rpm_limit: int = 20
+    provider_retry_max: int = 4
+
     @property
     def resolved_chat_model(self) -> str:
         if self.chat_model:

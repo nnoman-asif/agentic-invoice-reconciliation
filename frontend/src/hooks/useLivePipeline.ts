@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useInvoice, useInvoiceReconciliation } from "@/api/invoices"
 import type { ProcessingStatus } from "@/api/types"
+import { queueStatusLabel } from "@/components/invoice/ProcessingStatusBadge"
 
 export type AgentStage =
   | "parser"
@@ -39,6 +40,8 @@ export interface LivePipeline {
    * resolving). Lets sidebars/badges stay in sync with the canvas.
    */
   displayedStatus: ProcessingStatus | undefined
+  /** Human-readable queue / throttle hint while status is queued. */
+  queueMessage: string | null
 }
 
 const INDEX_TO_STATUS: Record<number, ProcessingStatus> = {
@@ -73,16 +76,14 @@ const STAGES: { id: AgentStage; label: string; description: string }[] = [
 ]
 
 // Maps an invoice's processing_status to the index of the stage
-// that's "running" (or 4 / -2 for special states).
-//   * queued maps to 0 so the parser node lights up "running" the
-//     moment the upload is enqueued -- previously queued mapped to
-//     -1, which left every stage idle and made it look like nothing
-//     was happening even though work was imminent.
+// that's "running" (or 4 / -2 / -1 for special states).
+//   * queued maps to -1 so stages stay idle while we surface the
+//     queue-position / high-traffic message instead of a fake parser spin.
 //   * "detecting" exists so the anomaly node has a status to live
 //     under, otherwise the matcher would flip straight to "resolving"
 //     and the anomaly node would never appear active.
 const STATUS_TO_INDEX: Record<ProcessingStatus, number> = {
-  queued: 0,
+  queued: -1,
   parsing: 0,
   matching: 1,
   detecting: 2,
@@ -166,8 +167,9 @@ export function useLivePipeline(invoiceId: string | undefined) {
     // spinning Parser node underneath.
     const currentIndex = displayedIndex
     const isFailed = currentIndex === -2
+    const isQueued = invoice?.processing_status === "queued"
     const isAnimating = currentIndex >= 0 && currentIndex < 4
-    const isProcessing = isAnimating
+    const isProcessing = isAnimating || isQueued
 
     // When the pipeline failed, the parser is the most common culprit
     // but not the only one -- if `parsed_data` is populated the parser
@@ -228,10 +230,18 @@ export function useLivePipeline(invoiceId: string | undefined) {
     }
 
     let displayedStatus: ProcessingStatus | undefined
-    if (currentIndex === -2) displayedStatus = "failed"
+    if (isQueued) displayedStatus = "queued"
+    else if (currentIndex === -2) displayedStatus = "failed"
     else if (currentIndex >= 0 && currentIndex <= 4) {
       displayedStatus = INDEX_TO_STATUS[currentIndex]
     }
+
+    const queueMessage = isQueued
+      ? queueStatusLabel(
+          invoice?.queue_position,
+          invoice?.provider_throttled
+        ) ?? "Waiting in queue"
+      : null
 
     return {
       stages,
@@ -248,6 +258,7 @@ export function useLivePipeline(invoiceId: string | undefined) {
       totalProcessingMs:
         currentIndex === 4 ? recon?.processing_time_ms ?? null : null,
       displayedStatus,
+      queueMessage,
     }
   }, [invoice, recon, displayedIndex])
 }

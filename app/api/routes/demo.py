@@ -19,6 +19,12 @@ from app.db.session import get_db
 from app.demo.limits import get_used_scenarios, record_demo_run, remaining_runs
 from app.demo.scenarios import get_scenario, list_scenarios
 from app.models.database import Invoice, User
+from app.tools.limits import (
+    acquire_inflight,
+    check_upload_rate,
+    enqueue_invoice,
+    release_inflight,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -159,6 +165,8 @@ async def run_demo_scenario(
         request, db, mint_if_missing=True
     )
 
+    await check_upload_rate(redis, owner_id)
+
     remaining = await remaining_runs(redis, token_key=token_key, ip=ip)
     if remaining <= 0:
         raise HTTPException(
@@ -171,9 +179,15 @@ async def run_demo_scenario(
         )
 
     invoice_id = uuid.uuid4()
+    await acquire_inflight(redis, owner_id, invoice_id)
+
     dest = Path(settings.upload_dir) / f"{invoice_id}.pdf"
     dest.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(scenario.pdf_path, dest)
+    try:
+        shutil.copyfile(scenario.pdf_path, dest)
+    except Exception:
+        await release_inflight(redis, owner_id, invoice_id)
+        raise
 
     invoice = Invoice(
         id=invoice_id,
@@ -185,12 +199,17 @@ async def run_demo_scenario(
         po_reference=scenario.po_number,
     )
     db.add(invoice)
-    await db.commit()
+    try:
+        await db.commit()
+    except Exception:
+        await release_inflight(redis, owner_id, invoice_id)
+        raise
 
     try:
-        await redis.lpush("invoice_queue", str(invoice_id))
+        await enqueue_invoice(redis, owner_id, invoice_id)
     except Exception as exc:
         logger.error("[Demo] Redis enqueue failed for %s: %s", invoice_id, exc)
+        await release_inflight(redis, owner_id, invoice_id)
         raise HTTPException(
             status_code=503,
             detail="Demo invoice saved but could not be queued",

@@ -18,6 +18,14 @@ from app.models.schemas import (
     InvoiceUploadResponse,
     ReconciliationResponse,
 )
+from app.tools.limits import (
+    acquire_inflight,
+    check_upload_rate,
+    enqueue_invoice,
+    get_queue_position,
+    is_provider_throttled,
+    release_inflight,
+)
 from app.tools.pdf_validation import PDF_MAGIC, validate_pdf
 
 logger = logging.getLogger(__name__)
@@ -44,6 +52,21 @@ async def _read_upload_capped(file: UploadFile, max_bytes: int) -> bytes:
     return b"".join(chunks)
 
 
+def _invoice_response(
+    invoice: Invoice,
+    *,
+    queue_position: int | None = None,
+    provider_throttled: bool = False,
+) -> InvoiceResponse:
+    data = InvoiceResponse.model_validate(invoice)
+    return data.model_copy(
+        update={
+            "queue_position": queue_position,
+            "provider_throttled": provider_throttled,
+        }
+    )
+
+
 @router.post("/invoices/upload", response_model=InvoiceUploadResponse, status_code=201)
 async def upload_invoice(
     request: Request,
@@ -52,6 +75,9 @@ async def upload_invoice(
     db: AsyncSession = Depends(get_db),
     owner: OwnerContext = Depends(get_current_owner),
 ):
+    redis = request.app.state.redis
+    await check_upload_rate(redis, owner.user_id)
+
     # ── Validation ─────────────────────────────────────────────────
     max_mb = min(settings.max_upload_size_mb, owner.max_upload_mb)
     max_bytes = max_mb * 1024 * 1024
@@ -101,7 +127,15 @@ async def upload_invoice(
     existing = existing_q.scalar_one_or_none()
     if existing is not None:
         response.status_code = 200
-        return existing
+        pos = None
+        throttled = False
+        if existing.processing_status == "queued":
+            pos = await get_queue_position(redis, existing.id)
+            throttled = await is_provider_throttled(redis)
+        upload = InvoiceUploadResponse.model_validate(existing)
+        return upload.model_copy(
+            update={"queue_position": pos, "provider_throttled": throttled}
+        )
 
     validated = validate_pdf(
         content,
@@ -111,8 +145,11 @@ async def upload_invoice(
     if not validated.ok:
         raise HTTPException(status_code=400, detail=validated.reason)
 
-    # ── Persist file + DB row ──────────────────────────────────────
+    # Reserve in-flight before persist so we never enqueue past the cap.
     invoice_id = uuid.uuid4()
+    await acquire_inflight(redis, owner.user_id, invoice_id)
+
+    # ── Persist file + DB row ──────────────────────────────────────
     file_path = f"{settings.upload_dir}/{invoice_id}{ext or '.pdf'}"
     Path(file_path).parent.mkdir(parents=True, exist_ok=True)
     with open(file_path, "wb") as f:
@@ -133,13 +170,18 @@ async def upload_invoice(
     # COMMIT BEFORE ENQUEUE -- otherwise the worker can race ahead and
     # see "invoice not found" because the upload's transaction is still
     # open (this was bug C3).
-    await db.commit()
-    await db.refresh(invoice)
+    try:
+        await db.commit()
+        await db.refresh(invoice)
+    except Exception:
+        await release_inflight(redis, owner.user_id, invoice_id)
+        raise
 
     try:
-        await request.app.state.redis.lpush("invoice_queue", str(invoice_id))
+        position = await enqueue_invoice(redis, owner.user_id, invoice_id)
     except Exception as e:
         logger.error("[Upload] Redis enqueue failed for invoice %s: %s", invoice_id, e)
+        await release_inflight(redis, owner.user_id, invoice_id)
         raise HTTPException(
             status_code=503,
             detail=(
@@ -149,7 +191,11 @@ async def upload_invoice(
             ),
         ) from e
 
-    return invoice
+    throttled = await is_provider_throttled(redis)
+    upload = InvoiceUploadResponse.model_validate(invoice)
+    return upload.model_copy(
+        update={"queue_position": position, "provider_throttled": throttled}
+    )
 
 
 @router.get("/invoices", response_model=list[InvoiceListResponse])
@@ -183,6 +229,7 @@ async def list_invoices(
 @router.get("/invoices/{invoice_id}", response_model=InvoiceResponse)
 async def get_invoice(
     invoice_id: uuid.UUID,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     owner: OwnerContext = Depends(get_current_owner),
 ):
@@ -198,7 +245,18 @@ async def get_invoice(
     invoice = result.scalar_one_or_none()
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
-    return invoice
+
+    queue_position = None
+    throttled = False
+    if invoice.processing_status == "queued":
+        redis = request.app.state.redis
+        queue_position = await get_queue_position(redis, invoice.id)
+        throttled = await is_provider_throttled(redis)
+    return _invoice_response(
+        invoice,
+        queue_position=queue_position,
+        provider_throttled=throttled,
+    )
 
 
 @router.get("/invoices/{invoice_id}/reconciliation", response_model=ReconciliationResponse)

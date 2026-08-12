@@ -111,6 +111,10 @@ export interface Invoice {
   created_at: string
   updated_at: string
   line_items: InvoiceLineItem[]
+  /** 1-based position while queued; null when not in the Redis list. */
+  queue_position?: number | null
+  /** True when the global provider RPM limiter is backing off. */
+  provider_throttled?: boolean
 }
 
 export interface InvoiceUploadResponse {
@@ -119,6 +123,8 @@ export interface InvoiceUploadResponse {
   business_status: BusinessStatus
   raw_file_path: string | null
   created_at: string
+  queue_position?: number | null
+  provider_throttled?: boolean
 }
 
 export interface PurchaseOrderListItem {

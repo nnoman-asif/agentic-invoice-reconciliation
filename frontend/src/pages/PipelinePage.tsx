@@ -101,6 +101,14 @@ export function PipelinePage() {
                         <ProcessingStatusBadge
                           status={badgeStatus}
                           className="text-[10px]"
+                          queuePosition={
+                            isSelected ? pipeline.invoice?.queue_position : undefined
+                          }
+                          providerThrottled={
+                            isSelected
+                              ? pipeline.invoice?.provider_throttled
+                              : undefined
+                          }
                         />
                         <span className="text-[10px] text-muted-foreground">
                           {formatRelative(inv.created_at)}

@@ -16,12 +16,21 @@ interface Props {
 }
 
 export function PipelineVisualizer({ pipeline }: Props) {
-  const { stages, invoice, isProcessing, totalProcessingMs } = pipeline
+  const { stages, invoice, isProcessing, totalProcessingMs, queueMessage } =
+    pipeline
   const [selected, setSelected] = useState<AgentStage | null>(null)
 
   const selectedStage = selected
     ? stages.find((s) => s.id === selected)
     : null
+
+  const statusValue = queueMessage
+    ? queueMessage
+    : isProcessing
+      ? "Processing"
+      : invoice?.processing_status === "failed"
+        ? "Failed"
+        : "Completed"
 
   return (
     <div className="space-y-6">
@@ -63,15 +72,9 @@ export function PipelineVisualizer({ pipeline }: Props) {
           <div className="mt-8 pt-6 border-t border-border/40 grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mx-auto text-sm">
             <Field
               label="Status"
-              value={
-                isProcessing
-                  ? "Processing"
-                  : invoice?.processing_status === "failed"
-                    ? "Failed"
-                    : "Completed"
-              }
+              value={statusValue}
               accent={
-                isProcessing
+                queueMessage || isProcessing
                   ? "primary"
                   : invoice?.processing_status === "failed"
                     ? "destructive"

@@ -19,6 +19,7 @@ from app.models.database import (
 )
 from app.observability.tracing import create_trace, end_trace, trace_agent_step, flush as flush_traces
 from app.tools.db_queries import check_duplicate_invoice
+from app.tools.limits import release_inflight_by_ids
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,17 @@ logger = logging.getLogger(__name__)
 OUTCOME_SUCCEEDED = "succeeded"
 OUTCOME_SKIPPED_NOT_FOUND = "skipped_not_found"
 OUTCOME_FAILED = "failed"
+
+
+def _release_inflight_slot(owner_id: uuid.UUID, invoice_id: uuid.UUID) -> None:
+    try:
+        release_inflight_by_ids(owner_id, invoice_id)
+    except Exception as exc:
+        logger.warning(
+            "[InvoiceService] Failed to release in-flight slot for %s: %s",
+            invoice_id,
+            exc,
+        )
 
 
 # After each named graph node finishes, set the invoice to this status
@@ -139,6 +151,7 @@ async def process_invoice(invoice_id: uuid.UUID, db: AsyncSession) -> str:
                     if final_state.get("error"):
                         await _handle_failure(invoice, final_state["error"], db)
                         flush_traces()
+                        _release_inflight_slot(invoice.owner_id, invoice_id)
                         return OUTCOME_FAILED
 
                     parsed_number = final_state.get("invoice_number")
@@ -166,6 +179,7 @@ async def process_invoice(invoice_id: uuid.UUID, db: AsyncSession) -> str:
                 break
 
         if duplicate_short_circuit:
+            _release_inflight_slot(invoice.owner_id, invoice_id)
             return OUTCOME_FAILED
 
         # Pull parser-derived fields onto the row.
@@ -189,6 +203,7 @@ async def process_invoice(invoice_id: uuid.UUID, db: AsyncSession) -> str:
 
         end_trace(trace)
         flush_traces()
+        _release_inflight_slot(invoice.owner_id, invoice_id)
         return OUTCOME_SUCCEEDED
 
     except Exception as e:
@@ -197,14 +212,18 @@ async def process_invoice(invoice_id: uuid.UUID, db: AsyncSession) -> str:
             trace_agent_step(trace, "pipeline_error", {}, {"error": str(e)}, 0)
             end_trace(trace)
             flush_traces()
+        owner_for_release = None
         try:
             await db.rollback()
             stmt = select(Invoice).where(Invoice.id == invoice_id)
             result = await db.execute(stmt)
             invoice = result.scalar_one()
+            owner_for_release = invoice.owner_id
             await _handle_failure(invoice, str(e), db)
         except Exception as inner_e:
             logger.error(f"[InvoiceService] Could not record failure for {invoice_id}: {inner_e}")
+        if owner_for_release is not None:
+            _release_inflight_slot(owner_for_release, invoice_id)
         return OUTCOME_FAILED
 
 

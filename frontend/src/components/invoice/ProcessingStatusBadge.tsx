@@ -38,32 +38,54 @@ function getConfig(status: ProcessingStatus): Config {
   return CONFIG[status] ?? { label: status, icon: HelpCircle, variant: "muted" }
 }
 
+export function queueStatusLabel(
+  queuePosition?: number | null,
+  providerThrottled?: boolean
+): string | null {
+  if (providerThrottled) {
+    return "High traffic — waiting for capacity"
+  }
+  if (queuePosition != null && queuePosition > 0) {
+    return `You are #${queuePosition} in the queue`
+  }
+  return null
+}
+
 export function ProcessingStatusBadge({
   status,
   className,
+  queuePosition,
+  providerThrottled,
 }: {
   status: ProcessingStatus
   className?: string
+  queuePosition?: number | null
+  providerThrottled?: boolean
 }) {
   const config = getConfig(status)
   const Icon = config.icon
+  const queueLabel =
+    status === "queued"
+      ? queueStatusLabel(queuePosition, providerThrottled)
+      : null
+  const label = queueLabel ?? config.label
 
-  const isActive = config.spinning
+  const isActive = config.spinning || (status === "queued" && !!queueLabel)
 
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
-      key={status}
+      key={`${status}-${label}`}
       transition={{ type: "spring", stiffness: 380, damping: 30 }}
     >
       <Badge variant={config.variant} className={cn("gap-1.5", className)}>
-        {isActive ? (
+        {isActive && status !== "queued" ? (
           <Loader2 className="size-3 animate-spin" />
         ) : (
           <Icon className="size-3" />
         )}
-        {config.label}
+        {label}
       </Badge>
     </motion.div>
   )

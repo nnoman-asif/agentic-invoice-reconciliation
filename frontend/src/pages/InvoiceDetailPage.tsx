@@ -164,7 +164,11 @@ export function InvoiceDetailPage() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            <ProcessingStatusBadge status={invoice.processing_status} />
+            <ProcessingStatusBadge
+              status={invoice.processing_status}
+              queuePosition={invoice.queue_position}
+              providerThrottled={invoice.provider_throttled}
+            />
             <BusinessStatusBadge status={invoice.business_status} />
           </div>
         </div>

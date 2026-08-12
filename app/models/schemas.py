@@ -290,6 +290,8 @@ class InvoiceUploadResponse(BaseModel):
     business_status: str
     raw_file_path: str | None
     created_at: datetime
+    queue_position: int | None = None
+    provider_throttled: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -313,6 +315,9 @@ class InvoiceResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     line_items: list[InvoiceLineItemResponse] = []
+    # Populated when processing_status == "queued" (not ORM columns).
+    queue_position: int | None = None
+    provider_throttled: bool = False
 
     model_config = {"from_attributes": True}
 

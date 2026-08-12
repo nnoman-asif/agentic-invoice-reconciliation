@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import OwnerContext, get_current_owner
 from app.db.session import get_db
 from app.models.database import Invoice
+from app.tools.limits import acquire_inflight, enqueue_invoice
 
 router = APIRouter()
 
@@ -43,9 +44,16 @@ async def webhook_invoice_received(
             detail=f"Invoice is already in '{invoice.processing_status}' state",
         )
 
+    redis = request.app.state.redis
+    await acquire_inflight(redis, owner.user_id, inv_uuid)
+
     invoice.processing_status = "queued"
     await db.flush()
 
-    await request.app.state.redis.lpush("invoice_queue", str(inv_uuid))
+    position = await enqueue_invoice(redis, owner.user_id, inv_uuid)
 
-    return {"status": "queued", "invoice_id": str(inv_uuid)}
+    return {
+        "status": "queued",
+        "invoice_id": str(inv_uuid),
+        "queue_position": position,
+    }
