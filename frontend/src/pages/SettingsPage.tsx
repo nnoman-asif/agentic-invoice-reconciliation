@@ -1,16 +1,44 @@
-import { Sun, Moon, Monitor } from "lucide-react"
+import { useEffect, useState } from "react"
+import { useNavigate } from "react-router-dom"
+import { format } from "date-fns"
+import { Loader2, Monitor, Moon, Sun } from "lucide-react"
+import { toast } from "sonner"
 
 import { PageHeader } from "@/components/shared/PageHeader"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useTheme } from "@/hooks/useTheme"
 import { useHealth } from "@/api/health"
-import type { Theme } from "@/store/ui"
+import { useTheme } from "@/hooks/useTheme"
+import { AUTH_ENABLED } from "@/lib/firebase"
+import { ROUTES } from "@/lib/routes"
 import { cn } from "@/lib/utils"
+import { useAuthStore } from "@/store/auth"
+import type { Theme } from "@/store/ui"
 
-const THEMES: { value: Theme; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+const THEMES: {
+  value: Theme
+  label: string
+  icon: React.ComponentType<{ className?: string }>
+}[] = [
   { value: "light", label: "Light", icon: Sun },
   { value: "dark", label: "Dark", icon: Moon },
   { value: "system", label: "System", icon: Monitor },
@@ -19,6 +47,34 @@ const THEMES: { value: Theme; label: string; icon: React.ComponentType<{ classNa
 export function SettingsPage() {
   const { theme, setTheme } = useTheme()
   const { data: health } = useHealth()
+  const navigate = useNavigate()
+
+  const me = useAuthStore((s) => s.me)
+  const ready = useAuthStore((s) => s.ready)
+  const refreshMe = useAuthStore((s) => s.refreshMe)
+  const signOut = useAuthStore((s) => s.signOut)
+  const deleteAccount = useAuthStore((s) => s.deleteAccount)
+  const isGuest = useAuthStore((s) => s.isGuest)
+  const isSignedIn = useAuthStore((s) => s.isSignedIn)
+  const [deleting, setDeleting] = useState(false)
+
+  useEffect(() => {
+    if (AUTH_ENABLED && ready) {
+      void refreshMe().catch(() => undefined)
+    }
+  }, [ready, refreshMe])
+
+  const onDelete = async () => {
+    setDeleting(true)
+    try {
+      await deleteAccount()
+      navigate(ROUTES.landing, { replace: true })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Delete failed")
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   return (
     <div className="space-y-8 max-w-3xl">
@@ -30,6 +86,7 @@ export function SettingsPage() {
       <Tabs defaultValue="appearance">
         <TabsList>
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
+          <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="system">System</TabsTrigger>
           <TabsTrigger value="about">About</TabsTrigger>
         </TabsList>
@@ -69,6 +126,137 @@ export function SettingsPage() {
                   )
                 })}
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="profile" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Account</CardTitle>
+              <CardDescription>
+                Identity, retention window, and account deletion.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm">
+              {!AUTH_ENABLED ? (
+                <p className="text-muted-foreground">
+                  Auth is disabled for local development. Enable{" "}
+                  <code className="text-xs">VITE_AUTH_ENABLED</code> and
+                  matching backend <code className="text-xs">AUTH_ENABLED</code>{" "}
+                  to use profiles.
+                </p>
+              ) : !me ? (
+                <p className="text-muted-foreground">
+                  No session loaded.{" "}
+                  <button
+                    type="button"
+                    className="underline underline-offset-4"
+                    onClick={() => navigate(ROUTES.login)}
+                  >
+                    Sign in
+                  </button>
+                </p>
+              ) : (
+                <>
+                  <dl className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <dt className="text-muted-foreground text-xs uppercase tracking-wide">
+                        Kind
+                      </dt>
+                      <dd className="mt-1 font-medium capitalize">{me.kind}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground text-xs uppercase tracking-wide">
+                        Display name
+                      </dt>
+                      <dd className="mt-1 font-medium">
+                        {me.display_name || "—"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground text-xs uppercase tracking-wide">
+                        Email
+                      </dt>
+                      <dd className="mt-1 font-medium">{me.email || "—"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground text-xs uppercase tracking-wide">
+                        Daily invoice limit
+                      </dt>
+                      <dd className="mt-1 font-medium">
+                        {me.daily_invoice_limit}
+                      </dd>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <dt className="text-muted-foreground text-xs uppercase tracking-wide">
+                        Scheduled deletion
+                      </dt>
+                      <dd className="mt-1 font-medium">
+                        {me.scheduled_deletion_at
+                          ? format(
+                              new Date(me.scheduled_deletion_at),
+                              "MMM d, yyyy HH:mm"
+                            )
+                          : "—"}
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    {(isSignedIn() || isGuest()) && (
+                      <Button
+                        variant="outline"
+                        onClick={() =>
+                          void signOut().then(() =>
+                            navigate(ROUTES.landing, { replace: true })
+                          )
+                        }
+                      >
+                        Sign out
+                      </Button>
+                    )}
+
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="destructive">
+                          Delete my account and all my data
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>
+                            Delete account permanently?
+                          </AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This removes your account, invoices, uploads, and
+                            related records. This cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel disabled={deleting}>
+                            Cancel
+                          </AlertDialogCancel>
+                          <AlertDialogAction
+                            disabled={deleting}
+                            onClick={(e) => {
+                              e.preventDefault()
+                              void onDelete()
+                            }}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          >
+                            {deleting ? (
+                              <Loader2 className="size-4 animate-spin" />
+                            ) : (
+                              "Delete everything"
+                            )}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

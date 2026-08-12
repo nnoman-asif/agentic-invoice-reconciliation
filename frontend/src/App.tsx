@@ -7,6 +7,7 @@ import {
   ShortcutsOverlay,
   useShortcutsOverlay,
 } from "@/components/layout/ShortcutsOverlay"
+import { RequireAuth } from "@/components/auth/RequireAuth"
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary"
 import { PageLoadingBar } from "@/components/shared/PageLoadingBar"
 import { POSheet } from "@/components/shared/POSheet"
@@ -17,6 +18,7 @@ import { useInvoiceNotifications } from "@/hooks/useInvoiceNotifications"
 import { useShortcuts, type Shortcut } from "@/hooks/useShortcuts"
 
 import { LandingPage } from "@/pages/LandingPage"
+import { LoginPage } from "@/pages/LoginPage"
 import { DashboardPage } from "@/pages/DashboardPage"
 import { InboxPage } from "@/pages/InboxPage"
 import { InvoiceDetailPage } from "@/pages/InvoiceDetailPage"
@@ -59,24 +61,27 @@ export default function App() {
       <ErrorBoundary key={location.pathname}>
         <Routes location={location}>
           <Route path={ROUTES.landing} element={<LandingPage />} />
+          <Route path={ROUTES.login} element={<LoginPage />} />
 
-          <Route element={<AppShell />}>
-            <Route path={ROUTES.dashboard} element={<DashboardPage />} />
-            <Route path={ROUTES.inbox} element={<InboxPage />} />
-            <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
-            <Route
-              path="/invoices/:id/compare"
-              element={<CompareViewPage />}
-            />
-            <Route path={ROUTES.pipeline} element={<PipelinePage />} />
-            <Route path={ROUTES.flow} element={<FlowPage />} />
-            <Route path={ROUTES.exceptions} element={<ExceptionsPage />} />
-            <Route
-              path={ROUTES.purchaseOrders}
-              element={<PurchaseOrdersPage />}
-            />
-            <Route path={ROUTES.vendors} element={<VendorsPage />} />
-            <Route path={ROUTES.settings} element={<SettingsPage />} />
+          <Route element={<RequireAuth />}>
+            <Route element={<AppShell />}>
+              <Route path={ROUTES.dashboard} element={<DashboardPage />} />
+              <Route path={ROUTES.inbox} element={<InboxPage />} />
+              <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
+              <Route
+                path="/invoices/:id/compare"
+                element={<CompareViewPage />}
+              />
+              <Route path={ROUTES.pipeline} element={<PipelinePage />} />
+              <Route path={ROUTES.flow} element={<FlowPage />} />
+              <Route path={ROUTES.exceptions} element={<ExceptionsPage />} />
+              <Route
+                path={ROUTES.purchaseOrders}
+                element={<PurchaseOrdersPage />}
+              />
+              <Route path={ROUTES.vendors} element={<VendorsPage />} />
+              <Route path={ROUTES.settings} element={<SettingsPage />} />
+            </Route>
           </Route>
 
           <Route path="*" element={<NotFoundPage />} />

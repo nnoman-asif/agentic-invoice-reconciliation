@@ -1,5 +1,6 @@
 export const ROUTES = {
   landing: "/",
+  login: "/login",
   dashboard: "/dashboard",
   inbox: "/invoices",
   invoiceDetail: (id: string) => `/invoices/${id}`,
