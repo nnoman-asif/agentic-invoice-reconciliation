@@ -32,27 +32,68 @@ class Base(DeclarativeBase):
     pass
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    kind: Mapped[str] = mapped_column(String(10), nullable=False)  # user | guest | system
+    firebase_uid: Mapped[str | None] = mapped_column(String(128), unique=True)
+    email: Mapped[str | None] = mapped_column(String(255))
+    display_name: Mapped[str | None] = mapped_column(String(255))
+    daily_invoice_limit: Mapped[int] = mapped_column(Integer, nullable=False, default=15)
+    max_upload_mb: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
+    max_pdf_pages: Mapped[int] = mapped_column(Integer, nullable=False, default=10)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now, onupdate=_utc_now)
+
+    vendors: Mapped[list["Vendor"]] = relationship(back_populates="owner")
+    purchase_orders: Mapped[list["PurchaseOrder"]] = relationship(back_populates="owner")
+    delivery_receipts: Mapped[list["DeliveryReceipt"]] = relationship(back_populates="owner")
+    invoices: Mapped[list["Invoice"]] = relationship(back_populates="owner")
+
+    __table_args__ = (
+        CheckConstraint("kind IN ('user', 'guest', 'system')", name="chk_users_kind"),
+        Index("idx_users_kind", "kind"),
+        Index("idx_users_last_seen", "last_seen_at"),
+    )
+
+
 class Vendor(Base):
     __tablename__ = "vendors"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    code: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
-    tax_id: Mapped[str | None] = mapped_column(String(50), unique=True)
+    code: Mapped[str] = mapped_column(String(50), nullable=False)
+    tax_id: Mapped[str | None] = mapped_column(String(50))
     address: Mapped[str | None] = mapped_column(Text)
     contact_email: Mapped[str | None] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now, onupdate=_utc_now)
 
+    owner: Mapped["User"] = relationship(back_populates="vendors")
     purchase_orders: Mapped[list["PurchaseOrder"]] = relationship(back_populates="vendor")
     invoices: Mapped[list["Invoice"]] = relationship(back_populates="vendor")
+
+    __table_args__ = (
+        UniqueConstraint("owner_id", "code", name="uq_vendors_owner_code"),
+        UniqueConstraint("owner_id", "tax_id", name="uq_vendors_owner_tax_id"),
+        Index("idx_vendors_owner_id", "owner_id"),
+        Index("idx_vendors_name", "name"),
+    )
 
 
 class PurchaseOrder(Base):
     __tablename__ = "purchase_orders"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    po_number: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    po_number: Mapped[str] = mapped_column(String(50), nullable=False)
     vendor_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("vendors.id", ondelete="RESTRICT"), nullable=False)
     issue_date: Mapped[date] = mapped_column(nullable=False)
     expected_delivery_date: Mapped[date | None] = mapped_column()
@@ -63,12 +104,15 @@ class PurchaseOrder(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now, onupdate=_utc_now)
 
+    owner: Mapped["User"] = relationship(back_populates="purchase_orders")
     vendor: Mapped["Vendor"] = relationship(back_populates="purchase_orders")
     line_items: Mapped[list["POLineItem"]] = relationship(back_populates="purchase_order", cascade="all, delete-orphan")
     delivery_receipts: Mapped[list["DeliveryReceipt"]] = relationship(back_populates="purchase_order", cascade="all, delete-orphan")
     reconciliations: Mapped[list["Reconciliation"]] = relationship(back_populates="purchase_order")
 
     __table_args__ = (
+        UniqueConstraint("owner_id", "po_number", name="uq_po_owner_number"),
+        Index("idx_po_owner_id", "owner_id"),
         Index("idx_po_vendor_id", "vendor_id"),
         Index("idx_po_status", "status"),
     )
@@ -86,11 +130,12 @@ class POLineItem(Base):
     unit_price: Mapped[float] = mapped_column(DECIMAL(15, 2), nullable=False)
     total_price: Mapped[float] = mapped_column(DECIMAL(15, 2), nullable=False)
     unit_of_measure: Mapped[str | None] = mapped_column(String(20))
-    # Cached embedding of `item_description`. Fetched by po_id, never
-    # searched by similarity — no HNSW index. Dimension must stay in
-    # lockstep with the active embedding provider; changing providers
-    # that emit a different size requires migrating this column.
-    description_embedding: Mapped[list[float] | None] = mapped_column(Vector(1024), nullable=True)
+    # Unconstrained vector so local Ollama (1024) and Gemini (1536) can
+    # coexist. embedding_model + embedding_dim stamp the producer; a
+    # mismatch is treated as a cache miss. No HNSW index (by design).
+    description_embedding: Mapped[list[float] | None] = mapped_column(Vector(), nullable=True)
+    embedding_model: Mapped[str | None] = mapped_column(String(100))
+    embedding_dim: Mapped[int | None] = mapped_column(Integer)
 
     purchase_order: Mapped["PurchaseOrder"] = relationship(back_populates="line_items")
 
@@ -104,7 +149,10 @@ class DeliveryReceipt(Base):
     __tablename__ = "delivery_receipts"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    receipt_number: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    receipt_number: Mapped[str] = mapped_column(String(50), nullable=False)
     po_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("purchase_orders.id", ondelete="CASCADE"), nullable=False)
     received_date: Mapped[date] = mapped_column(nullable=False)
     receiver_name: Mapped[str | None] = mapped_column(String(255))
@@ -112,10 +160,13 @@ class DeliveryReceipt(Base):
     notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
 
+    owner: Mapped["User"] = relationship(back_populates="delivery_receipts")
     purchase_order: Mapped["PurchaseOrder"] = relationship(back_populates="delivery_receipts")
     line_items: Mapped[list["DeliveryLineItem"]] = relationship(back_populates="delivery_receipt", cascade="all, delete-orphan")
 
     __table_args__ = (
+        UniqueConstraint("owner_id", "receipt_number", name="uq_dr_owner_receipt"),
+        Index("idx_dr_owner_id", "owner_id"),
         Index("idx_dr_po_id", "po_id"),
     )
 
@@ -144,7 +195,10 @@ class Invoice(Base):
     __tablename__ = "invoices"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    invoice_number: Mapped[str | None] = mapped_column(String(100), unique=True)
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    invoice_number: Mapped[str | None] = mapped_column(String(100))
     po_reference: Mapped[str | None] = mapped_column(String(100))
     vendor_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("vendors.id", ondelete="RESTRICT"))
     invoice_date: Mapped[date | None] = mapped_column()
@@ -156,16 +210,23 @@ class Invoice(Base):
     business_status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     raw_file_path: Mapped[str | None] = mapped_column(String(500))
     file_content_type: Mapped[str | None] = mapped_column(String(50))
+    file_hash: Mapped[str | None] = mapped_column(String(64))
+    raw_text: Mapped[str | None] = mapped_column(Text)
+    file_deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     parsed_data: Mapped[dict | None] = mapped_column(JSONB)
     error_message: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now, onupdate=_utc_now)
 
+    owner: Mapped["User"] = relationship(back_populates="invoices")
     vendor: Mapped["Vendor | None"] = relationship(back_populates="invoices")
     line_items: Mapped[list["InvoiceLineItem"]] = relationship(back_populates="invoice", cascade="all, delete-orphan")
     reconciliations: Mapped[list["Reconciliation"]] = relationship(back_populates="invoice", cascade="all, delete-orphan")
 
     __table_args__ = (
+        UniqueConstraint("owner_id", "invoice_number", name="uq_inv_owner_number"),
+        UniqueConstraint("owner_id", "file_hash", name="uq_inv_owner_file_hash"),
+        Index("idx_inv_owner_id", "owner_id"),
         Index("idx_inv_vendor_id", "vendor_id"),
         Index("idx_inv_processing_status", "processing_status"),
         Index("idx_inv_business_status", "business_status"),

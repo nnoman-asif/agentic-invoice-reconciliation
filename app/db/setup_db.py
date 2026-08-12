@@ -1,29 +1,55 @@
 """
 Standalone database setup script.
-Creates all 11 tables with correct types, constraints, indices, and FK cascade rules.
+Creates all 12 tables with correct types, constraints, indices, and FK cascade rules.
+Also bootstraps the system and local-dev users.
 
 Usage:
     python -m app.db.setup_db
+    python -m app.db.setup_db --reset
 """
 
 import sys
 
 import psycopg2
 
-from app.config import settings
+from app.config import LOCAL_DEV_USER_ID, SYSTEM_USER_ID, settings
 
 
-TABLES_SQL = """
+TABLES_SQL = f"""
 
 -- Enable pgvector extension
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ============================================================
+-- 0. users
+-- ============================================================
+CREATE TABLE IF NOT EXISTS users (
+    id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    kind                  VARCHAR(10)  NOT NULL,
+    firebase_uid          VARCHAR(128),
+    email                 VARCHAR(255),
+    display_name          VARCHAR(255),
+    daily_invoice_limit   INTEGER      NOT NULL DEFAULT 15,
+    max_upload_mb         INTEGER      NOT NULL DEFAULT 5,
+    max_pdf_pages         INTEGER      NOT NULL DEFAULT 10,
+    last_seen_at          TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    created_at            TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    updated_at            TIMESTAMPTZ  NOT NULL DEFAULT now(),
+
+    CONSTRAINT chk_users_kind CHECK (kind IN ('user', 'guest', 'system')),
+    CONSTRAINT uq_users_firebase_uid UNIQUE (firebase_uid)
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_kind ON users (kind);
+CREATE INDEX IF NOT EXISTS idx_users_last_seen ON users (last_seen_at);
+
+-- ============================================================
 -- 1. vendors
 -- ============================================================
 CREATE TABLE IF NOT EXISTS vendors (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    owner_id        UUID         NOT NULL,
     name            VARCHAR(255) NOT NULL,
     code            VARCHAR(50)  NOT NULL,
     tax_id          VARCHAR(50),
@@ -32,10 +58,13 @@ CREATE TABLE IF NOT EXISTS vendors (
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
 
-    CONSTRAINT uq_vendors_code   UNIQUE (code),
-    CONSTRAINT uq_vendors_tax_id UNIQUE (tax_id)
+    CONSTRAINT uq_vendors_owner_code   UNIQUE (owner_id, code),
+    CONSTRAINT uq_vendors_owner_tax_id UNIQUE (owner_id, tax_id),
+    CONSTRAINT fk_vendors_owner FOREIGN KEY (owner_id)
+        REFERENCES users (id) ON DELETE CASCADE
 );
 
+CREATE INDEX IF NOT EXISTS idx_vendors_owner_id ON vendors (owner_id);
 CREATE INDEX IF NOT EXISTS idx_vendors_name ON vendors (name);
 
 -- ============================================================
@@ -43,6 +72,7 @@ CREATE INDEX IF NOT EXISTS idx_vendors_name ON vendors (name);
 -- ============================================================
 CREATE TABLE IF NOT EXISTS purchase_orders (
     id                      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    owner_id                UUID           NOT NULL,
     po_number               VARCHAR(50)    NOT NULL,
     vendor_id               UUID           NOT NULL,
     issue_date              DATE           NOT NULL,
@@ -54,11 +84,14 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
     created_at              TIMESTAMPTZ    NOT NULL DEFAULT now(),
     updated_at              TIMESTAMPTZ    NOT NULL DEFAULT now(),
 
-    CONSTRAINT uq_po_number UNIQUE (po_number),
+    CONSTRAINT uq_po_owner_number UNIQUE (owner_id, po_number),
+    CONSTRAINT fk_po_owner FOREIGN KEY (owner_id)
+        REFERENCES users (id) ON DELETE CASCADE,
     CONSTRAINT fk_po_vendor FOREIGN KEY (vendor_id)
         REFERENCES vendors (id) ON DELETE RESTRICT
 );
 
+CREATE INDEX IF NOT EXISTS idx_po_owner_id ON purchase_orders (owner_id);
 CREATE INDEX IF NOT EXISTS idx_po_vendor_id ON purchase_orders (vendor_id);
 CREATE INDEX IF NOT EXISTS idx_po_status    ON purchase_orders (status);
 
@@ -75,7 +108,9 @@ CREATE TABLE IF NOT EXISTS po_line_items (
     unit_price            DECIMAL(15,2)  NOT NULL,
     total_price           DECIMAL(15,2)  NOT NULL,
     unit_of_measure       VARCHAR(20),
-    description_embedding vector(1024),
+    description_embedding vector,
+    embedding_model       VARCHAR(100),
+    embedding_dim         INTEGER,
 
     CONSTRAINT uq_po_line UNIQUE (po_id, line_number),
     CONSTRAINT fk_poli_po FOREIGN KEY (po_id)
@@ -89,6 +124,7 @@ CREATE INDEX IF NOT EXISTS idx_poli_po_id ON po_line_items (po_id);
 -- ============================================================
 CREATE TABLE IF NOT EXISTS delivery_receipts (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    owner_id        UUID         NOT NULL,
     receipt_number  VARCHAR(50)  NOT NULL,
     po_id           UUID         NOT NULL,
     received_date   DATE         NOT NULL,
@@ -97,11 +133,14 @@ CREATE TABLE IF NOT EXISTS delivery_receipts (
     notes           TEXT,
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
 
-    CONSTRAINT uq_receipt_number UNIQUE (receipt_number),
+    CONSTRAINT uq_dr_owner_receipt UNIQUE (owner_id, receipt_number),
+    CONSTRAINT fk_dr_owner FOREIGN KEY (owner_id)
+        REFERENCES users (id) ON DELETE CASCADE,
     CONSTRAINT fk_dr_po FOREIGN KEY (po_id)
         REFERENCES purchase_orders (id) ON DELETE CASCADE
 );
 
+CREATE INDEX IF NOT EXISTS idx_dr_owner_id ON delivery_receipts (owner_id);
 CREATE INDEX IF NOT EXISTS idx_dr_po_id ON delivery_receipts (po_id);
 
 -- ============================================================
@@ -131,6 +170,7 @@ CREATE INDEX IF NOT EXISTS idx_dli_po_line_item   ON delivery_line_items (po_lin
 -- ============================================================
 CREATE TABLE IF NOT EXISTS invoices (
     id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    owner_id            UUID           NOT NULL,
     invoice_number      VARCHAR(100),
     po_reference        VARCHAR(100),
     vendor_id           UUID,
@@ -143,16 +183,23 @@ CREATE TABLE IF NOT EXISTS invoices (
     business_status     VARCHAR(20)    NOT NULL DEFAULT 'pending',
     raw_file_path       VARCHAR(500),
     file_content_type   VARCHAR(50),
+    file_hash           CHAR(64),
+    raw_text            TEXT,
+    file_deleted_at     TIMESTAMPTZ,
     parsed_data         JSONB,
     error_message       TEXT,
     created_at          TIMESTAMPTZ    NOT NULL DEFAULT now(),
     updated_at          TIMESTAMPTZ    NOT NULL DEFAULT now(),
 
-    CONSTRAINT uq_invoice_number UNIQUE (invoice_number),
+    CONSTRAINT uq_inv_owner_number UNIQUE (owner_id, invoice_number),
+    CONSTRAINT uq_inv_owner_file_hash UNIQUE (owner_id, file_hash),
+    CONSTRAINT fk_inv_owner FOREIGN KEY (owner_id)
+        REFERENCES users (id) ON DELETE CASCADE,
     CONSTRAINT fk_inv_vendor FOREIGN KEY (vendor_id)
         REFERENCES vendors (id) ON DELETE RESTRICT
 );
 
+CREATE INDEX IF NOT EXISTS idx_inv_owner_id           ON invoices (owner_id);
 CREATE INDEX IF NOT EXISTS idx_inv_vendor_id          ON invoices (vendor_id);
 CREATE INDEX IF NOT EXISTS idx_inv_processing_status  ON invoices (processing_status);
 CREATE INDEX IF NOT EXISTS idx_inv_business_status    ON invoices (business_status);
@@ -282,10 +329,27 @@ CREATE TABLE IF NOT EXISTS human_reviews (
 
 CREATE INDEX IF NOT EXISTS idx_hr_rec_id ON human_reviews (reconciliation_id);
 
--- Idempotent migration: CREATE TABLE IF NOT EXISTS does not add
--- columns to an existing table.
+-- Bootstrap system + local-dev users (idempotent).
+INSERT INTO users (id, kind, display_name, daily_invoice_limit, max_upload_mb, max_pdf_pages)
+VALUES
+    ('{SYSTEM_USER_ID}', 'system', 'System', 0, 0, 0),
+    ('{LOCAL_DEV_USER_ID}', 'user', 'Local Dev', 15, 10, 10)
+ON CONFLICT (id) DO NOTHING;
+
+-- Idempotent migrations for DBs created before this schema revision.
+-- Prefer `python -m app.db.setup_db --reset` on disposable local DBs.
 ALTER TABLE po_line_items
-    ADD COLUMN IF NOT EXISTS description_embedding vector(1024);
+    ALTER COLUMN description_embedding TYPE vector;
+ALTER TABLE po_line_items
+    ADD COLUMN IF NOT EXISTS embedding_model VARCHAR(100);
+ALTER TABLE po_line_items
+    ADD COLUMN IF NOT EXISTS embedding_dim INTEGER;
+ALTER TABLE invoices
+    ADD COLUMN IF NOT EXISTS file_hash CHAR(64);
+ALTER TABLE invoices
+    ADD COLUMN IF NOT EXISTS raw_text TEXT;
+ALTER TABLE invoices
+    ADD COLUMN IF NOT EXISTS file_deleted_at TIMESTAMPTZ;
 
 """
 
@@ -301,6 +365,7 @@ DROP TABLE IF EXISTS delivery_receipts CASCADE;
 DROP TABLE IF EXISTS po_line_items CASCADE;
 DROP TABLE IF EXISTS purchase_orders CASCADE;
 DROP TABLE IF EXISTS vendors CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
 """
 
 
@@ -321,7 +386,8 @@ def create_tables():
     try:
         with conn.cursor() as cur:
             cur.execute(TABLES_SQL)
-        print("[setup_db] All 11 tables created successfully.")
+        print("[setup_db] All 12 tables created successfully.")
+        print(f"[setup_db] Bootstrapped system={SYSTEM_USER_ID} local-dev={LOCAL_DEV_USER_ID}")
     except Exception as e:
         print(f"[setup_db] Error creating tables: {e}")
         sys.exit(1)

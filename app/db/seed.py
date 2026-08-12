@@ -1,5 +1,6 @@
 """
 Seed the database with sample vendors, purchase orders, and delivery receipts.
+All rows are owned by the system user (shared demo reference data).
 
 Usage:
     python -m app.db.seed
@@ -13,17 +14,86 @@ import psycopg2
 import psycopg2.extras
 from psycopg2.extras import execute_values
 
-from app.config import settings
+from app.config import SYSTEM_USER_ID, settings
 
 # Register UUID adapter so psycopg2 can handle uuid.UUID objects
 psycopg2.extras.register_uuid()
 
-# ── Fixed UUIDs for reproducible references ───────────────────────
+# ── Fixed UUIDs for reproducible, idempotent seeding ──────────────
 
-VENDOR_IDS = [uuid.uuid4() for _ in range(3)]
-PO_IDS = [uuid.uuid4() for _ in range(5)]
-PO_LINE_IDS = [[uuid.uuid4() for _ in range(3)] for _ in range(5)]
-DR_IDS = [uuid.uuid4() for _ in range(5)]
+VENDOR_IDS = [
+    uuid.UUID("a1000000-0000-4000-8000-000000000001"),
+    uuid.UUID("a1000000-0000-4000-8000-000000000002"),
+    uuid.UUID("a1000000-0000-4000-8000-000000000003"),
+]
+PO_IDS = [
+    uuid.UUID("a2000000-0000-4000-8000-000000000001"),
+    uuid.UUID("a2000000-0000-4000-8000-000000000002"),
+    uuid.UUID("a2000000-0000-4000-8000-000000000003"),
+    uuid.UUID("a2000000-0000-4000-8000-000000000004"),
+    uuid.UUID("a2000000-0000-4000-8000-000000000005"),
+]
+PO_LINE_IDS = [
+    [
+        uuid.UUID("a3000000-0000-4000-8000-000000000011"),
+        uuid.UUID("a3000000-0000-4000-8000-000000000012"),
+        uuid.UUID("a3000000-0000-4000-8000-000000000013"),
+    ],
+    [
+        uuid.UUID("a3000000-0000-4000-8000-000000000021"),
+        uuid.UUID("a3000000-0000-4000-8000-000000000022"),
+        uuid.UUID("a3000000-0000-4000-8000-000000000023"),
+    ],
+    [
+        uuid.UUID("a3000000-0000-4000-8000-000000000031"),
+        uuid.UUID("a3000000-0000-4000-8000-000000000032"),
+        uuid.UUID("a3000000-0000-4000-8000-000000000033"),
+    ],
+    [
+        uuid.UUID("a3000000-0000-4000-8000-000000000041"),
+        uuid.UUID("a3000000-0000-4000-8000-000000000042"),
+        uuid.UUID("a3000000-0000-4000-8000-000000000043"),
+    ],
+    [
+        uuid.UUID("a3000000-0000-4000-8000-000000000051"),
+        uuid.UUID("a3000000-0000-4000-8000-000000000052"),
+        uuid.UUID("a3000000-0000-4000-8000-000000000053"),
+    ],
+]
+DR_IDS = [
+    uuid.UUID("a4000000-0000-4000-8000-000000000001"),
+    uuid.UUID("a4000000-0000-4000-8000-000000000002"),
+    uuid.UUID("a4000000-0000-4000-8000-000000000003"),
+    uuid.UUID("a4000000-0000-4000-8000-000000000004"),
+    uuid.UUID("a4000000-0000-4000-8000-000000000005"),
+]
+DR_LINE_IDS = [
+    [
+        uuid.UUID("a5000000-0000-4000-8000-000000000011"),
+        uuid.UUID("a5000000-0000-4000-8000-000000000012"),
+        uuid.UUID("a5000000-0000-4000-8000-000000000013"),
+    ],
+    [
+        uuid.UUID("a5000000-0000-4000-8000-000000000021"),
+        uuid.UUID("a5000000-0000-4000-8000-000000000022"),
+        uuid.UUID("a5000000-0000-4000-8000-000000000023"),
+    ],
+    [
+        uuid.UUID("a5000000-0000-4000-8000-000000000031"),
+        uuid.UUID("a5000000-0000-4000-8000-000000000032"),
+        uuid.UUID("a5000000-0000-4000-8000-000000000033"),
+    ],
+    [
+        uuid.UUID("a5000000-0000-4000-8000-000000000041"),
+        uuid.UUID("a5000000-0000-4000-8000-000000000042"),
+        uuid.UUID("a5000000-0000-4000-8000-000000000043"),
+    ],
+    [
+        uuid.UUID("a5000000-0000-4000-8000-000000000051"),
+        uuid.UUID("a5000000-0000-4000-8000-000000000052"),
+        uuid.UUID("a5000000-0000-4000-8000-000000000053"),
+    ],
+]
 
 
 def get_connection():
@@ -38,17 +108,17 @@ def get_connection():
 
 def seed_vendors(cur):
     vendors = [
-        (VENDOR_IDS[0], "Acme Industrial Supplies", "ACME-001", "TAX-ACME-9821",
+        (VENDOR_IDS[0], SYSTEM_USER_ID, "Acme Industrial Supplies", "ACME-001", "TAX-ACME-9821",
          "123 Industrial Park, Houston, TX 77001", "billing@acmeindustrial.com"),
-        (VENDOR_IDS[1], "Global Steel Corporation", "GSC-002", "TAX-GSC-4455",
+        (VENDOR_IDS[1], SYSTEM_USER_ID, "Global Steel Corporation", "GSC-002", "TAX-GSC-4455",
          "456 Steel Avenue, Pittsburgh, PA 15201", "accounts@globalsteel.com"),
-        (VENDOR_IDS[2], "Precision Parts Manufacturing", "PPM-003", "TAX-PPM-7712",
+        (VENDOR_IDS[2], SYSTEM_USER_ID, "Precision Parts Manufacturing", "PPM-003", "TAX-PPM-7712",
          "789 Precision Blvd, Detroit, MI 48201", "invoices@precisionparts.com"),
     ]
     execute_values(
         cur,
-        """INSERT INTO vendors (id, name, code, tax_id, address, contact_email)
-           VALUES %s ON CONFLICT (code) DO NOTHING""",
+        """INSERT INTO vendors (id, owner_id, name, code, tax_id, address, contact_email)
+           VALUES %s ON CONFLICT (owner_id, code) DO NOTHING""",
         vendors,
     )
     print(f"  [seed] {len(vendors)} vendors inserted.")
@@ -57,26 +127,26 @@ def seed_vendors(cur):
 def seed_purchase_orders(cur):
     pos = [
         # PO-1: Acme - fasteners
-        (PO_IDS[0], "PO-2026-001", VENDOR_IDS[0], date(2026, 1, 10), date(2026, 2, 10),
+        (PO_IDS[0], SYSTEM_USER_ID, "PO-2026-001", VENDOR_IDS[0], date(2026, 1, 10), date(2026, 2, 10),
          "issued", 15750.00, "USD", None),
         # PO-2: Global Steel - steel plates
-        (PO_IDS[1], "PO-2026-002", VENDOR_IDS[1], date(2026, 1, 15), date(2026, 2, 15),
+        (PO_IDS[1], SYSTEM_USER_ID, "PO-2026-002", VENDOR_IDS[1], date(2026, 1, 15), date(2026, 2, 15),
          "issued", 48200.00, "USD", None),
         # PO-3: Precision Parts - bearings
-        (PO_IDS[2], "PO-2026-003", VENDOR_IDS[2], date(2026, 1, 20), date(2026, 2, 28),
+        (PO_IDS[2], SYSTEM_USER_ID, "PO-2026-003", VENDOR_IDS[2], date(2026, 1, 20), date(2026, 2, 28),
          "issued", 9360.00, "USD", None),
         # PO-4: Acme - safety equipment
-        (PO_IDS[3], "PO-2026-004", VENDOR_IDS[0], date(2026, 2, 1), date(2026, 3, 1),
+        (PO_IDS[3], SYSTEM_USER_ID, "PO-2026-004", VENDOR_IDS[0], date(2026, 2, 1), date(2026, 3, 1),
          "issued", 6840.00, "USD", None),
         # PO-5: Global Steel - pipes
-        (PO_IDS[4], "PO-2026-005", VENDOR_IDS[1], date(2026, 2, 5), date(2026, 3, 5),
+        (PO_IDS[4], SYSTEM_USER_ID, "PO-2026-005", VENDOR_IDS[1], date(2026, 2, 5), date(2026, 3, 5),
          "issued", 32500.00, "USD", None),
     ]
     execute_values(
         cur,
         """INSERT INTO purchase_orders
-           (id, po_number, vendor_id, issue_date, expected_delivery_date, status, total_amount, currency, notes)
-           VALUES %s ON CONFLICT (po_number) DO NOTHING""",
+           (id, owner_id, po_number, vendor_id, issue_date, expected_delivery_date, status, total_amount, currency, notes)
+           VALUES %s ON CONFLICT (owner_id, po_number) DO NOTHING""",
         pos,
     )
     print(f"  [seed] {len(pos)} purchase orders inserted.")
@@ -117,47 +187,47 @@ def seed_purchase_orders(cur):
 def seed_delivery_receipts(cur):
     receipts = [
         # Full delivery for PO-1
-        (DR_IDS[0], "REC-2026-001", PO_IDS[0], date(2026, 2, 8), "John Smith", "received", None),
+        (DR_IDS[0], SYSTEM_USER_ID, "REC-2026-001", PO_IDS[0], date(2026, 2, 8), "John Smith", "received", None),
         # Full delivery for PO-2
-        (DR_IDS[1], "REC-2026-002", PO_IDS[1], date(2026, 2, 14), "Jane Doe", "received", None),
+        (DR_IDS[1], SYSTEM_USER_ID, "REC-2026-002", PO_IDS[1], date(2026, 2, 14), "Jane Doe", "received", None),
         # Partial delivery for PO-3 (80% of bearings)
-        (DR_IDS[2], "REC-2026-003", PO_IDS[2], date(2026, 2, 25), "Mike Johnson", "partial",
+        (DR_IDS[2], SYSTEM_USER_ID, "REC-2026-003", PO_IDS[2], date(2026, 2, 25), "Mike Johnson", "partial",
          "80 of 100 bearings 6205 received; full qty for 6208 and seals"),
         # Full delivery for PO-4
-        (DR_IDS[3], "REC-2026-004", PO_IDS[3], date(2026, 2, 28), "Sarah Lee", "received", None),
+        (DR_IDS[3], SYSTEM_USER_ID, "REC-2026-004", PO_IDS[3], date(2026, 2, 28), "Sarah Lee", "received", None),
         # Full delivery for PO-5
-        (DR_IDS[4], "REC-2026-005", PO_IDS[4], date(2026, 3, 3), "Tom Wilson", "received", None),
+        (DR_IDS[4], SYSTEM_USER_ID, "REC-2026-005", PO_IDS[4], date(2026, 3, 3), "Tom Wilson", "received", None),
     ]
     execute_values(
         cur,
         """INSERT INTO delivery_receipts
-           (id, receipt_number, po_id, received_date, receiver_name, status, notes)
-           VALUES %s ON CONFLICT (receipt_number) DO NOTHING""",
+           (id, owner_id, receipt_number, po_id, received_date, receiver_name, status, notes)
+           VALUES %s ON CONFLICT (owner_id, receipt_number) DO NOTHING""",
         receipts,
     )
     print(f"  [seed] {len(receipts)} delivery receipts inserted.")
 
     dr_lines = [
         # REC-1: full delivery of PO-1
-        (uuid.uuid4(), DR_IDS[0], PO_LINE_IDS[0][0], "Steel Bolts M8x50mm Grade 8.8", 500, 500, 0),
-        (uuid.uuid4(), DR_IDS[0], PO_LINE_IDS[0][1], "Hex Nuts M8 Zinc Plated",        500, 500, 0),
-        (uuid.uuid4(), DR_IDS[0], PO_LINE_IDS[0][2], "Flat Washers M8 Stainless",       1000, 1000, 0),
+        (DR_LINE_IDS[0][0], DR_IDS[0], PO_LINE_IDS[0][0], "Steel Bolts M8x50mm Grade 8.8", 500, 500, 0),
+        (DR_LINE_IDS[0][1], DR_IDS[0], PO_LINE_IDS[0][1], "Hex Nuts M8 Zinc Plated",        500, 500, 0),
+        (DR_LINE_IDS[0][2], DR_IDS[0], PO_LINE_IDS[0][2], "Flat Washers M8 Stainless",       1000, 1000, 0),
         # REC-2: full delivery of PO-2
-        (uuid.uuid4(), DR_IDS[1], PO_LINE_IDS[1][0], "Hot Rolled Steel Plate 10mm", 20, 20, 0),
-        (uuid.uuid4(), DR_IDS[1], PO_LINE_IDS[1][1], "Cold Rolled Steel Plate 5mm", 30, 30, 0),
-        (uuid.uuid4(), DR_IDS[1], PO_LINE_IDS[1][2], "Steel Cutting Service - Flat", 1, 1, 0),
+        (DR_LINE_IDS[1][0], DR_IDS[1], PO_LINE_IDS[1][0], "Hot Rolled Steel Plate 10mm", 20, 20, 0),
+        (DR_LINE_IDS[1][1], DR_IDS[1], PO_LINE_IDS[1][1], "Cold Rolled Steel Plate 5mm", 30, 30, 0),
+        (DR_LINE_IDS[1][2], DR_IDS[1], PO_LINE_IDS[1][2], "Steel Cutting Service - Flat", 1, 1, 0),
         # REC-3: partial delivery of PO-3
-        (uuid.uuid4(), DR_IDS[2], PO_LINE_IDS[2][0], "Ball Bearing 6205-2RS",   80, 80, 0),   # 80 of 100
-        (uuid.uuid4(), DR_IDS[2], PO_LINE_IDS[2][1], "Ball Bearing 6208-2RS",   60, 60, 0),
-        (uuid.uuid4(), DR_IDS[2], PO_LINE_IDS[2][2], "Bearing Seal 6205 Rubber", 100, 100, 0),
+        (DR_LINE_IDS[2][0], DR_IDS[2], PO_LINE_IDS[2][0], "Ball Bearing 6205-2RS",   80, 80, 0),   # 80 of 100
+        (DR_LINE_IDS[2][1], DR_IDS[2], PO_LINE_IDS[2][1], "Ball Bearing 6208-2RS",   60, 60, 0),
+        (DR_LINE_IDS[2][2], DR_IDS[2], PO_LINE_IDS[2][2], "Bearing Seal 6205 Rubber", 100, 100, 0),
         # REC-4: full delivery of PO-4
-        (uuid.uuid4(), DR_IDS[3], PO_LINE_IDS[3][0], "Safety Helmet Class E",     50, 50, 0),
-        (uuid.uuid4(), DR_IDS[3], PO_LINE_IDS[3][1], "Safety Gloves Leather L",   200, 200, 0),
-        (uuid.uuid4(), DR_IDS[3], PO_LINE_IDS[3][2], "Safety Goggles Clear Lens", 100, 100, 0),
+        (DR_LINE_IDS[3][0], DR_IDS[3], PO_LINE_IDS[3][0], "Safety Helmet Class E",     50, 50, 0),
+        (DR_LINE_IDS[3][1], DR_IDS[3], PO_LINE_IDS[3][1], "Safety Gloves Leather L",   200, 200, 0),
+        (DR_LINE_IDS[3][2], DR_IDS[3], PO_LINE_IDS[3][2], "Safety Goggles Clear Lens", 100, 100, 0),
         # REC-5: full delivery of PO-5
-        (uuid.uuid4(), DR_IDS[4], PO_LINE_IDS[4][0], "Steel Pipe 4in Schedule 40", 50, 50, 0),
-        (uuid.uuid4(), DR_IDS[4], PO_LINE_IDS[4][1], "Steel Pipe 2in Schedule 40", 60, 60, 0),
-        (uuid.uuid4(), DR_IDS[4], PO_LINE_IDS[4][2], "Pipe Flange 4in 150lb",      20, 20, 0),
+        (DR_LINE_IDS[4][0], DR_IDS[4], PO_LINE_IDS[4][0], "Steel Pipe 4in Schedule 40", 50, 50, 0),
+        (DR_LINE_IDS[4][1], DR_IDS[4], PO_LINE_IDS[4][1], "Steel Pipe 2in Schedule 40", 60, 60, 0),
+        (DR_LINE_IDS[4][2], DR_IDS[4], PO_LINE_IDS[4][2], "Pipe Flange 4in 150lb",      20, 20, 0),
     ]
     execute_values(
         cur,
@@ -177,7 +247,7 @@ def seed_all():
             seed_vendors(cur)
             seed_purchase_orders(cur)
             seed_delivery_receipts(cur)
-        print("\n[seed] Database seeding complete.")
+        print("\n[seed] Database seeding complete (owned by system user).")
     except Exception as e:
         print(f"[seed] Error: {e}")
         sys.exit(1)

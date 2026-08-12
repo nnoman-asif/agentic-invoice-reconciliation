@@ -1,4 +1,12 @@
 from pydantic_settings import BaseSettings
+import uuid
+
+
+# Hardcoded bootstrap user IDs — also inserted by setup_db.py.
+# System owns the shared demo reference data; local-dev is returned by
+# get_current_owner when auth is disabled.
+SYSTEM_USER_ID = uuid.UUID("00000000-0000-4000-8000-000000000001")
+LOCAL_DEV_USER_ID = uuid.UUID("00000000-0000-4000-8000-000000000002")
 
 
 class Settings(BaseSettings):

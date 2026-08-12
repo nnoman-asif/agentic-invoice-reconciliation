@@ -101,19 +101,19 @@ Infrastructure: PostgreSQL+pgvector | Redis | Ollama (Qwen 2.5 7B) | Langfuse
 
 ## Database Schema
 
-11 normalized tables with proper FK constraints, CHECK constraints, and indices:
+12 normalized tables with proper FK constraints, CHECK constraints, and indices:
 
 ```
-vendors ---< purchase_orders ---< po_line_items
-   |              |
-   |              +---< delivery_receipts ---< delivery_line_items
-   |
-invoices ---< invoice_line_items
-   |
-   +---< reconciliations ---< line_item_matches
-              |                    |
-              +---< discrepancies -+
-              +---< human_reviews
+users ---< vendors ---< purchase_orders ---< po_line_items
+  |                         |
+  |                         +---< delivery_receipts ---< delivery_line_items
+  |
+  +---< invoices ---< invoice_line_items
+           |
+           +---< reconciliations ---< line_item_matches
+                      |                    |
+                      +---< discrepancies -+
+                      +---< human_reviews
 ```
 
 ## Prerequisites

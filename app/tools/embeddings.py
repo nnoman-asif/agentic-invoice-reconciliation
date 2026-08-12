@@ -1,10 +1,11 @@
 """Canonical embedding access for the matcher.
 
 All embedding calls go through this module so a future provider swap
-(Ollama -> Gemini / Groq / etc.) is a one-file change. Dimension is
-1024 to match the existing `po_line_items.description_embedding`
-pgvector column; changing providers that emit a different size
-requires migrating that column.
+(Ollama -> Gemini / Groq / etc.) is a one-file change. The
+`po_line_items.description_embedding` column is an unconstrained
+`vector` so local (1024) and remote (1536) dimensions can coexist;
+stamp `embedding_model` / `embedding_dim` on write and treat a
+mismatch as a cache miss.
 """
 
 from __future__ import annotations
