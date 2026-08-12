@@ -49,6 +49,8 @@ class Settings(BaseSettings):
     # File Upload
     upload_dir: str = "uploads/invoices"
     max_upload_size_mb: int = 10
+    # Reject extracted text longer than this (never truncate).
+    max_pdf_chars: int = 100_000
 
     # Auth (false = local-dev owner; true = Firebase / guest tokens)
     auth_enabled: bool = False

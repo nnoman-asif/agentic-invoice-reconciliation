@@ -1,8 +1,9 @@
+import hashlib
 import logging
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -17,34 +18,49 @@ from app.models.schemas import (
     InvoiceUploadResponse,
     ReconciliationResponse,
 )
+from app.tools.pdf_validation import PDF_MAGIC, validate_pdf
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Strict allow-lists for upload validation. Anything else is rejected
-# at the HTTP layer so it never enters the worker pipeline.
-PDF_MAGIC = b"%PDF-"
 ALLOWED_EXTENSIONS = {".pdf"}
 ALLOWED_CONTENT_TYPES = {"application/pdf", "application/x-pdf"}
+_READ_CHUNK = 64 * 1024
+
+
+async def _read_upload_capped(file: UploadFile, max_bytes: int) -> bytes:
+    """Read the upload in chunks; abort if it exceeds ``max_bytes``."""
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(_READ_CHUNK)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise HTTPException(status_code=413, detail="File too large")
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 @router.post("/invoices/upload", response_model=InvoiceUploadResponse, status_code=201)
 async def upload_invoice(
     request: Request,
+    response: Response,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     owner: OwnerContext = Depends(get_current_owner),
 ):
     # ── Validation ─────────────────────────────────────────────────
-    # Size cap (early exit before reading body)
     max_mb = min(settings.max_upload_size_mb, owner.max_upload_mb)
-    if file.size is not None and file.size > max_mb * 1024 * 1024:
+    max_bytes = max_mb * 1024 * 1024
+
+    if file.size is not None and file.size > max_bytes:
         raise HTTPException(status_code=413, detail="File too large")
     if file.size == 0:
         raise HTTPException(status_code=400, detail="File is empty")
 
-    # Extension whitelist
     ext = Path(file.filename).suffix.lower() if file.filename else ""
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
@@ -55,8 +71,6 @@ async def upload_invoice(
             ),
         )
 
-    # Content-type whitelist (browser-set; not authoritative on its own
-    # but rejecting obviously-wrong types gives a clearer error)
     if file.content_type and file.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(
             status_code=415,
@@ -66,21 +80,40 @@ async def upload_invoice(
             ),
         )
 
-    # Read the body and verify the PDF magic header. This catches
-    # spoofed extensions and zero-byte payloads regardless of what
-    # `file.size` reported (some clients omit Content-Length).
-    content = await file.read()
+    content = await _read_upload_capped(file, max_bytes)
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="File is empty")
+
+    # Fast magic check before heavier validation
     if not content.startswith(PDF_MAGIC):
         raise HTTPException(
             status_code=415,
             detail="File content is not a valid PDF (missing %PDF- header).",
         )
 
+    file_hash = hashlib.sha256(content).hexdigest()
+    existing_q = await db.execute(
+        select(Invoice).where(
+            Invoice.owner_id == owner.user_id,
+            Invoice.file_hash == file_hash,
+        )
+    )
+    existing = existing_q.scalar_one_or_none()
+    if existing is not None:
+        response.status_code = 200
+        return existing
+
+    validated = validate_pdf(
+        content,
+        max_pages=owner.max_pdf_pages,
+        max_chars=settings.max_pdf_chars,
+    )
+    if not validated.ok:
+        raise HTTPException(status_code=400, detail=validated.reason)
+
     # ── Persist file + DB row ──────────────────────────────────────
     invoice_id = uuid.uuid4()
-    file_path = f"{settings.upload_dir}/{invoice_id}{ext}"
+    file_path = f"{settings.upload_dir}/{invoice_id}{ext or '.pdf'}"
     Path(file_path).parent.mkdir(parents=True, exist_ok=True)
     with open(file_path, "wb") as f:
         f.write(content)
@@ -91,7 +124,9 @@ async def upload_invoice(
         processing_status="queued",
         business_status="pending",
         raw_file_path=file_path,
-        file_content_type=file.content_type,
+        file_content_type=file.content_type or "application/pdf",
+        file_hash=file_hash,
+        raw_text=validated.text,
     )
     db.add(invoice)
 
@@ -104,7 +139,7 @@ async def upload_invoice(
     try:
         await request.app.state.redis.lpush("invoice_queue", str(invoice_id))
     except Exception as e:
-        logger.error(f"[Upload] Redis enqueue failed for invoice {invoice_id}: {e}")
+        logger.error("[Upload] Redis enqueue failed for invoice %s: %s", invoice_id, e)
         raise HTTPException(
             status_code=503,
             detail=(

@@ -51,15 +51,22 @@ Rules:
 def parse_invoice(state: dict) -> dict:
     """Extract structured data from an invoice file using LLM."""
     invoice_id = state["invoice_id"]
-    logger.info(f"[ParserAgent] Parsing invoice {invoice_id}")
+    logger.info("[ParserAgent] Parsing invoice %s", invoice_id)
 
     raw_file_path = state.get("raw_file_path", "")
     content_type = state.get("file_content_type")
 
-    try:
-        raw_text = extract_invoice_text(raw_file_path, content_type)
-    except FileNotFoundError:
-        return {**state, "error": f"Invoice file not found: {raw_file_path}"}
+    # Prefer text captured at upload (Commit 10); fall back to on-disk extract
+    # for older rows / demo copies that skipped the upload gate.
+    raw_text = (state.get("raw_text") or "").strip()
+    if not raw_text:
+        try:
+            raw_text = extract_invoice_text(raw_file_path, content_type)
+        except Exception as exc:
+            return {
+                **state,
+                "error": f"Failed to extract invoice text: {exc}",
+            }
 
     if not raw_text.strip():
         return {**state, "error": "No text could be extracted from the invoice file"}

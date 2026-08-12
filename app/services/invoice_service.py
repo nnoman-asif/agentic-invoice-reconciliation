@@ -96,6 +96,7 @@ async def process_invoice(invoice_id: uuid.UUID, db: AsyncSession) -> str:
         "db_session": db,
         "raw_file_path": invoice.raw_file_path or "",
         "file_content_type": invoice.file_content_type,
+        "raw_text": invoice.raw_text or "",
         "processing_start_ms": start_time * 1000,
     }
 
