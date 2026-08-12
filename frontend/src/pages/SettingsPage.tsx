@@ -25,10 +25,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Textarea } from "@/components/ui/textarea"
 import { useHealth } from "@/api/health"
-import { useQuota } from "@/api/quota"
+import { useQuota, useRequestQuotaIncrease } from "@/api/quota"
 import { useTheme } from "@/hooks/useTheme"
 import { AUTH_ENABLED } from "@/lib/firebase"
 import { ROUTES } from "@/lib/routes"
@@ -50,6 +53,7 @@ export function SettingsPage() {
   const { theme, setTheme } = useTheme()
   const { data: health } = useHealth()
   const { data: quota, isLoading: quotaLoading } = useQuota()
+  const requestQuota = useRequestQuotaIncrease()
   const navigate = useNavigate()
 
   const me = useAuthStore((s) => s.me)
@@ -60,6 +64,9 @@ export function SettingsPage() {
   const isGuest = useAuthStore((s) => s.isGuest)
   const isSignedIn = useAuthStore((s) => s.isSignedIn)
   const [deleting, setDeleting] = useState(false)
+  const [requestedLimit, setRequestedLimit] = useState("")
+  const [requestReason, setRequestReason] = useState("")
+  const [requestSent, setRequestSent] = useState(false)
 
   useEffect(() => {
     if (AUTH_ENABLED && ready) {
@@ -76,6 +83,28 @@ export function SettingsPage() {
       toast.error(err instanceof Error ? err.message : "Delete failed")
     } finally {
       setDeleting(false)
+    }
+  }
+
+  const onRequestQuota = async () => {
+    const limit = Number.parseInt(requestedLimit, 10)
+    if (!Number.isFinite(limit) || limit <= (quota?.limit ?? 0)) {
+      toast.error(
+        `Enter a limit greater than your current allowance (${quota?.limit ?? 0})`
+      )
+      return
+    }
+    try {
+      await requestQuota.mutateAsync({
+        requested_limit: limit,
+        reason: requestReason.trim() || undefined,
+      })
+      setRequestSent(true)
+      toast.success("Quota request submitted")
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Could not submit quota request"
+      )
     }
   }
 
@@ -331,14 +360,59 @@ export function SettingsPage() {
                     </div>
                   </dl>
                   {quota.remaining === 0 && (
-                    <p className="text-sm text-muted-foreground border border-border/60 rounded-lg p-3 bg-muted/20">
-                      You have used today&apos;s invoice allowance. Uploads that
-                      need the LLM will wait until the daily reset
-                      {quota.system_status === "limited"
-                        ? ", or until system capacity recovers"
-                        : ""}
-                      .
-                    </p>
+                    <div className="space-y-4 border border-border/60 rounded-lg p-4 bg-muted/20">
+                      <p className="text-sm text-muted-foreground">
+                        You have used today&apos;s invoice allowance. Uploads that
+                        need the LLM will wait until the daily reset
+                        {quota.system_status === "limited"
+                          ? ", or until system capacity recovers"
+                          : ""}
+                        . Request a higher daily limit below.
+                      </p>
+                      {requestSent ? (
+                        <p className="text-sm font-medium text-foreground">
+                          Request received. We&apos;ll review it shortly.
+                        </p>
+                      ) : (
+                        <div className="space-y-3">
+                          <div className="space-y-1.5">
+                            <Label htmlFor="requested-limit">
+                              Requested daily limit
+                            </Label>
+                            <Input
+                              id="requested-limit"
+                              type="number"
+                              min={quota.limit + 1}
+                              placeholder={String(quota.limit + 15)}
+                              value={requestedLimit}
+                              onChange={(e) => setRequestedLimit(e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="request-reason">
+                              Reason (optional)
+                            </Label>
+                            <Textarea
+                              id="request-reason"
+                              rows={3}
+                              placeholder="What are you evaluating or building?"
+                              value={requestReason}
+                              onChange={(e) => setRequestReason(e.target.value)}
+                            />
+                          </div>
+                          <Button
+                            onClick={() => void onRequestQuota()}
+                            disabled={requestQuota.isPending}
+                          >
+                            {requestQuota.isPending ? (
+                              <Loader2 className="size-4 animate-spin" />
+                            ) : (
+                              "Request increase"
+                            )}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </>
               ) : (

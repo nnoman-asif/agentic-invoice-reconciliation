@@ -87,6 +87,9 @@ class Settings(BaseSettings):
     daily_invoice_limit_default: int = 15
     global_chat_daily_cap: int = 1000
 
+    # Quota increase Discord notify (Commit 14). Real URL belongs in .env only.
+    discord_webhook_url: str | None = None
+
     @property
     def resolved_chat_model(self) -> str:
         if self.chat_model:

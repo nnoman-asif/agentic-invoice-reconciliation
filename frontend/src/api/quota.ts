@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { apiClient } from "./client"
 
 export interface QuotaResponse {
@@ -10,6 +10,20 @@ export interface QuotaResponse {
   llm_paused: boolean
 }
 
+export interface QuotaRequestPayload {
+  requested_limit: number
+  reason?: string
+}
+
+export interface QuotaRequestResult {
+  id: string
+  requested_limit: number
+  reason: string | null
+  status: string
+  created_at: string
+  discord_notified: boolean
+}
+
 export function useQuota(options?: { refetchInterval?: number | false }) {
   return useQuery({
     queryKey: ["quota"],
@@ -18,5 +32,17 @@ export function useQuota(options?: { refetchInterval?: number | false }) {
       return data
     },
     refetchInterval: options?.refetchInterval ?? 30_000,
+  })
+}
+
+export function useRequestQuotaIncrease() {
+  return useMutation({
+    mutationFn: async (payload: QuotaRequestPayload) => {
+      const { data } = await apiClient.post<QuotaRequestResult>(
+        "/api/quota/request",
+        payload
+      )
+      return data
+    },
   })
 }

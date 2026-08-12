@@ -51,6 +51,7 @@ class User(Base):
     purchase_orders: Mapped[list["PurchaseOrder"]] = relationship(back_populates="owner")
     delivery_receipts: Mapped[list["DeliveryReceipt"]] = relationship(back_populates="owner")
     invoices: Mapped[list["Invoice"]] = relationship(back_populates="owner")
+    quota_requests: Mapped[list["QuotaRequest"]] = relationship(back_populates="user")
 
     __table_args__ = (
         CheckConstraint("kind IN ('user', 'guest', 'system')", name="chk_users_kind"),
@@ -346,6 +347,32 @@ class HumanReview(Base):
     decided_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
 
     reconciliation: Mapped["Reconciliation"] = relationship(back_populates="human_reviews")
+
+
+class QuotaRequest(Base):
+    """Durable record of a user asking for a higher daily invoice limit."""
+
+    __tablename__ = "quota_requests"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    requested_limit: Mapped[int] = mapped_column(Integer, nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+
+    user: Mapped["User"] = relationship(back_populates="quota_requests")
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'approved', 'rejected')",
+            name="chk_quota_requests_status",
+        ),
+        Index("idx_quota_requests_user_id", "user_id"),
+        Index("idx_quota_requests_status", "status"),
+    )
 
     __table_args__ = (
         Index("idx_hr_rec_id", "reconciliation_id"),

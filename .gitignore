@@ -52,4 +52,8 @@ logs/
 # Misc
 *.bak
 *.tmp
-.env.local
+*.env.local
+
+# Cursor local state / plans (never commit plan files or secrets from here)
+.cursor/
+.cursor/plans/

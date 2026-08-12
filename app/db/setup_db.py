@@ -1,6 +1,6 @@
 """
 Standalone database setup script.
-Creates all 12 tables with correct types, constraints, indices, and FK cascade rules.
+Creates all 13 tables with correct types, constraints, indices, and FK cascade rules.
 Also bootstraps the system and local-dev users.
 
 Usage:
@@ -329,6 +329,26 @@ CREATE TABLE IF NOT EXISTS human_reviews (
 
 CREATE INDEX IF NOT EXISTS idx_hr_rec_id ON human_reviews (reconciliation_id);
 
+-- ============================================================
+-- 12. quota_requests
+-- ============================================================
+CREATE TABLE IF NOT EXISTS quota_requests (
+    id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id           UUID           NOT NULL,
+    requested_limit   INTEGER        NOT NULL,
+    reason            TEXT,
+    status            VARCHAR(20)    NOT NULL DEFAULT 'pending',
+    created_at        TIMESTAMPTZ    NOT NULL DEFAULT now(),
+
+    CONSTRAINT fk_quota_req_user FOREIGN KEY (user_id)
+        REFERENCES users (id) ON DELETE CASCADE,
+    CONSTRAINT chk_quota_requests_status
+        CHECK (status IN ('pending', 'approved', 'rejected'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_quota_requests_user_id ON quota_requests (user_id);
+CREATE INDEX IF NOT EXISTS idx_quota_requests_status ON quota_requests (status);
+
 -- Bootstrap system + local-dev users (idempotent).
 INSERT INTO users (id, kind, display_name, daily_invoice_limit, max_upload_mb, max_pdf_pages)
 VALUES
@@ -354,6 +374,7 @@ ALTER TABLE invoices
 """
 
 DROP_ALL_SQL = """
+DROP TABLE IF EXISTS quota_requests CASCADE;
 DROP TABLE IF EXISTS human_reviews CASCADE;
 DROP TABLE IF EXISTS discrepancies CASCADE;
 DROP TABLE IF EXISTS line_item_matches CASCADE;
@@ -386,7 +407,7 @@ def create_tables():
     try:
         with conn.cursor() as cur:
             cur.execute(TABLES_SQL)
-        print("[setup_db] All 12 tables created successfully.")
+        print("[setup_db] All 13 tables created successfully.")
         print(f"[setup_db] Bootstrapped system={SYSTEM_USER_ID} local-dev={LOCAL_DEV_USER_ID}")
     except Exception as e:
         print(f"[setup_db] Error creating tables: {e}")
