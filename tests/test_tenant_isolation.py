@@ -34,8 +34,12 @@ def _route_depends_on_owner(route: APIRoute) -> bool:
 
 def test_all_api_routes_require_owner_dependency():
     """Fail if any protected /api data route forgets get_current_owner."""
-    # Public mint endpoint — intentionally unauthenticated.
-    public = {("POST", "/api/auth/guest")}
+    # Public mint + demo endpoints — intentionally unauthenticated.
+    public = {
+        ("POST", "/api/auth/guest"),
+        ("GET", "/api/demo/scenarios"),
+        ("POST", "/api/demo/run"),
+    }
 
     missing: list[str] = []
     for route in app.routes:

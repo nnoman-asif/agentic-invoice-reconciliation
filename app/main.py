@@ -11,6 +11,7 @@ from app.api.routes import (
     auth,
     dashboard,
     delivery_receipts,
+    demo,
     exceptions,
     health,
     invoices,
@@ -60,6 +61,7 @@ app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
 app.include_router(health.router, tags=["Health"])
 app.include_router(auth.router, prefix="/api", tags=["Auth"])
+app.include_router(demo.router, prefix="/api", tags=["Demo"])
 app.include_router(invoices.router, prefix="/api", tags=["Invoices"])
 app.include_router(purchase_orders.router, prefix="/api", tags=["Purchase Orders"])
 app.include_router(delivery_receipts.router, prefix="/api", tags=["Delivery Receipts"])

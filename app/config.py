@@ -59,6 +59,11 @@ class Settings(BaseSettings):
     secret_key: str = "dev-only-change-me"
     inactive_account_days: int = 7
 
+    # Demo
+    demo_runs_per_day: int = 3
+    # Only trust CF-Connecting-IP when the app sits behind the Cloudflare Worker.
+    trust_proxy_header: bool = False
+
     @property
     def database_url(self) -> str:
         return (

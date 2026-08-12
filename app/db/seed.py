@@ -4,6 +4,7 @@ All rows are owned by the system user (shared demo reference data).
 
 Usage:
     python -m app.db.seed
+    python -m app.db.seed --with-embeddings
 """
 
 import sys
@@ -239,7 +240,54 @@ def seed_delivery_receipts(cur):
     print(f"  [seed] {len(dr_lines)} delivery line items inserted.")
 
 
-def seed_all():
+def seed_po_embeddings(cur):
+    """Precompute system PO line embeddings so demo runs skip embedding calls."""
+    from app.tools.embeddings import get_embeddings_batch
+
+    cur.execute(
+        """
+        SELECT pli.id, pli.item_description
+        FROM po_line_items pli
+        JOIN purchase_orders po ON po.id = pli.po_id
+        WHERE po.owner_id = %s
+          AND (pli.description_embedding IS NULL
+               OR pli.embedding_model IS DISTINCT FROM %s
+               OR pli.embedding_dim IS DISTINCT FROM %s)
+        ORDER BY pli.id
+        """,
+        (
+            SYSTEM_USER_ID,
+            settings.ollama_embedding_model,
+            settings.ollama_embedding_dim,
+        ),
+    )
+    rows = cur.fetchall()
+    if not rows:
+        print("  [seed] PO embeddings already up to date.")
+        return
+
+    ids = [r[0] for r in rows]
+    texts = [r[1] for r in rows]
+    print(f"  [seed] Embedding {len(texts)} PO line description(s)...")
+    vectors = get_embeddings_batch(texts)
+    model = settings.ollama_embedding_model
+
+    for line_id, vec in zip(ids, vectors):
+        literal = "[" + ",".join(str(float(x)) for x in vec) + "]"
+        cur.execute(
+            """
+            UPDATE po_line_items
+               SET description_embedding = %s::vector,
+                   embedding_model = %s,
+                   embedding_dim = %s
+             WHERE id = %s
+            """,
+            (literal, model, len(vec), line_id),
+        )
+    print(f"  [seed] {len(vectors)} PO line embeddings written.")
+
+
+def seed_all(*, with_embeddings: bool = False):
     conn = get_connection()
     conn.autocommit = True
     try:
@@ -247,6 +295,8 @@ def seed_all():
             seed_vendors(cur)
             seed_purchase_orders(cur)
             seed_delivery_receipts(cur)
+            if with_embeddings:
+                seed_po_embeddings(cur)
         print("\n[seed] Database seeding complete (owned by system user).")
     except Exception as e:
         print(f"[seed] Error: {e}")
@@ -256,4 +306,5 @@ def seed_all():
 
 
 if __name__ == "__main__":
-    seed_all()
+    with_embeddings = "--with-embeddings" in sys.argv
+    seed_all(with_embeddings=with_embeddings)
