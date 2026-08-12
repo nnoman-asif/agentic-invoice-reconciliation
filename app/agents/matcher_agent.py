@@ -7,6 +7,7 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.tools.db_queries import (
     find_delivery_receipts_for_po,
     find_purchase_order_by_number,
@@ -22,12 +23,14 @@ logger = logging.getLogger(__name__)
 async def match_records(state: dict) -> dict:
     """Find matching PO and delivery receipts, then perform 3-way line matching."""
     invoice_id = state["invoice_id"]
+    owner_id = uuid.UUID(str(state["owner_id"]))
     db: AsyncSession = state["db_session"]
     logger.info(f"[MatcherAgent] Matching records for invoice {invoice_id}")
 
     # Step 1: Resolve vendor
     vendor = await find_vendor_by_name_or_tax_id(
         db,
+        owner_id,
         name=state.get("vendor_name"),
         tax_id=state.get("vendor_tax_id"),
     )
@@ -54,12 +57,13 @@ async def match_records(state: dict) -> dict:
 
     if po_reference:
         matched_po = await find_purchase_order_by_number(
-            db, po_reference, vendor_id=uuid.UUID(vendor_id)
+            db, owner_id, po_reference, vendor_id=uuid.UUID(vendor_id)
         )
 
     if not matched_po:
         candidates = await find_purchase_orders_by_vendor(
             db,
+            owner_id,
             vendor_id=uuid.UUID(vendor_id),
             amount=state.get("total_amount"),
         )
@@ -95,6 +99,8 @@ async def match_records(state: dict) -> dict:
             vectors = get_embeddings_batch([li.item_description for li in missing])
             for li, vec in zip(missing, vectors):
                 li.description_embedding = vec
+                li.embedding_model = settings.ollama_embedding_model
+                li.embedding_dim = len(vec)
             await db.flush()
         except Exception as e:
             logger.warning(
@@ -122,7 +128,7 @@ async def match_records(state: dict) -> dict:
     ]
 
     # Step 3: Find delivery receipts
-    receipts = await find_delivery_receipts_for_po(db, matched_po.id)
+    receipts = await find_delivery_receipts_for_po(db, owner_id, matched_po.id)
     all_delivery_lines = []
     for receipt in receipts:
         for dl in receipt.line_items:

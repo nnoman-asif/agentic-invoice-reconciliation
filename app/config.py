@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     upload_dir: str = "uploads/invoices"
     max_upload_size_mb: int = 10
 
+    # Auth (Commit 6 enables Firebase/guest; False = local-dev owner)
+    auth_enabled: bool = False
+
     @property
     def database_url(self) -> str:
         return (

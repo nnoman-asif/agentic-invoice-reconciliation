@@ -92,6 +92,7 @@ async def process_invoice(invoice_id: uuid.UUID, db: AsyncSession) -> str:
 
     initial_state = {
         "invoice_id": str(invoice_id),
+        "owner_id": str(invoice.owner_id),
         "db_session": db,
         "raw_file_path": invoice.raw_file_path or "",
         "file_content_type": invoice.file_content_type,
@@ -142,7 +143,7 @@ async def process_invoice(invoice_id: uuid.UUID, db: AsyncSession) -> str:
                     parsed_number = final_state.get("invoice_number")
                     if parsed_number:
                         is_duplicate = await check_duplicate_invoice(
-                            db, parsed_number, invoice_id
+                            db, invoice.owner_id, parsed_number, invoice_id
                         )
                         if is_duplicate:
                             await _handle_failure(

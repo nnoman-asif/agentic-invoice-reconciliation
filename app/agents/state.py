@@ -8,6 +8,7 @@ from typing import Any, TypedDict
 class ReconciliationState(TypedDict, total=False):
     # Input -- populated when the graph is invoked
     invoice_id: str
+    owner_id: str
     db_session: Any
     raw_file_path: str
     file_content_type: str | None

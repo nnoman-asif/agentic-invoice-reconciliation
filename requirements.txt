@@ -38,3 +38,7 @@ python-dotenv
 httpx
 tenacity
 numpy
+
+# Tests
+pytest
+pytest-asyncio

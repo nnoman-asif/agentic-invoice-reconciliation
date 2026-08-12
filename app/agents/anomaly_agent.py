@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import date
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +26,7 @@ def _parse_date(date_str: str | None) -> date | None:
 async def detect_anomalies(state: dict) -> dict:
     """Run all anomaly checks on the matching results."""
     invoice_id = state["invoice_id"]
+    owner_id = uuid.UUID(str(state["owner_id"]))
     db: AsyncSession = state["db_session"]
     logger.info(f"[AnomalyAgent] Checking anomalies for invoice {invoice_id}")
 
@@ -33,7 +35,7 @@ async def detect_anomalies(state: dict) -> dict:
     is_duplicate = False
     if invoice_number:
         is_duplicate = await check_duplicate_invoice(
-            db, invoice_number, invoice_id
+            db, owner_id, invoice_number, invoice_id
         )
 
     matched_po = state.get("matched_po")
