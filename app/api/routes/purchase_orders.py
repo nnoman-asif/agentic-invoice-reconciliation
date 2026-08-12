@@ -5,11 +5,12 @@ import uuid
 from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
-from sqlalchemy import delete as sql_delete
+from sqlalchemy import case, delete as sql_delete
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.api.deps import OwnerContext, get_current_owner, require_owned_write
 from app.db.session import get_db
 from app.models.database import (
     Discrepancy,
@@ -28,6 +29,7 @@ from app.models.schemas import (
     PurchaseOrderResponse,
     PurchaseOrderUpdate,
 )
+from app.tools.db_queries import scope_to_owner
 from app.tools.embeddings import get_embeddings_batch
 
 logger = logging.getLogger(__name__)
@@ -113,9 +115,25 @@ def _parse_int(raw: str, field: str) -> int:
 router = APIRouter()
 
 
+async def _visible_po(
+    db: AsyncSession, po_id: uuid.UUID, owner_id: uuid.UUID
+) -> PurchaseOrder | None:
+    stmt = (
+        select(PurchaseOrder)
+        .options(selectinload(PurchaseOrder.line_items))
+        .where(PurchaseOrder.id == po_id)
+    )
+    stmt = scope_to_owner(stmt, PurchaseOrder, owner_id, include_system=True)
+    return (await db.execute(stmt)).scalar_one_or_none()
+
+
 @router.get("/purchase-orders", response_model=list[PurchaseOrderListResponse])
-async def list_purchase_orders(db: AsyncSession = Depends(get_db)):
+async def list_purchase_orders(
+    db: AsyncSession = Depends(get_db),
+    owner: OwnerContext = Depends(get_current_owner),
+):
     stmt = select(PurchaseOrder).order_by(PurchaseOrder.created_at.desc())
+    stmt = scope_to_owner(stmt, PurchaseOrder, owner.user_id, include_system=True)
     result = await db.execute(stmt)
     return result.scalars().all()
 
@@ -124,11 +142,15 @@ async def list_purchase_orders(db: AsyncSession = Depends(get_db)):
 async def create_purchase_order(
     data: PurchaseOrderCreate,
     db: AsyncSession = Depends(get_db),
+    owner: OwnerContext = Depends(get_current_owner),
 ):
     # Check po_number uniqueness up-front so the user gets a friendly
     # 409 instead of an opaque 500 from a UNIQUE-constraint violation.
     existing_q = await db.execute(
-        select(PurchaseOrder.id).where(PurchaseOrder.po_number == data.po_number)
+        select(PurchaseOrder.id).where(
+            PurchaseOrder.owner_id == owner.user_id,
+            PurchaseOrder.po_number == data.po_number,
+        )
     )
     if existing_q.scalar_one_or_none():
         raise HTTPException(
@@ -136,14 +158,16 @@ async def create_purchase_order(
             detail=f"po_number {data.po_number!r} already exists",
         )
 
-    # Vendor must exist (otherwise FK explodes on flush).
-    vendor_q = await db.execute(
-        select(Vendor.id).where(Vendor.id == data.vendor_id)
+    # Vendor must be visible (own or system).
+    vendor_stmt = select(Vendor.id).where(Vendor.id == data.vendor_id)
+    vendor_stmt = scope_to_owner(
+        vendor_stmt, Vendor, owner.user_id, include_system=True
     )
-    if not vendor_q.scalar_one_or_none():
+    if not (await db.execute(vendor_stmt)).scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Vendor not found")
 
     po = PurchaseOrder(
+        owner_id=owner.user_id,
         po_number=data.po_number,
         vendor_id=data.vendor_id,
         issue_date=data.issue_date,
@@ -189,6 +213,7 @@ async def update_purchase_order(
     po_id: uuid.UUID,
     data: PurchaseOrderUpdate,
     db: AsyncSession = Depends(get_db),
+    owner: OwnerContext = Depends(get_current_owner),
 ):
     """Update a PO. Performs a smart upsert on line items keyed by
     `line_number` so existing rows referenced by `line_item_matches`
@@ -202,13 +227,13 @@ async def update_purchase_order(
     )
     result = await db.execute(stmt)
     po = result.scalar_one_or_none()
-    if not po:
-        raise HTTPException(status_code=404, detail="Purchase order not found")
+    require_owned_write(po, owner.user_id, not_found="Purchase order not found")
 
     # Uniqueness check if po_number is changing.
     if data.po_number is not None and data.po_number != po.po_number:
         existing_q = await db.execute(
             select(PurchaseOrder.id).where(
+                PurchaseOrder.owner_id == owner.user_id,
                 PurchaseOrder.po_number == data.po_number,
                 PurchaseOrder.id != po_id,
             )
@@ -221,10 +246,11 @@ async def update_purchase_order(
         po.po_number = data.po_number
 
     if data.vendor_id is not None and data.vendor_id != po.vendor_id:
-        vendor_q = await db.execute(
-            select(Vendor.id).where(Vendor.id == data.vendor_id)
+        vendor_stmt = select(Vendor.id).where(Vendor.id == data.vendor_id)
+        vendor_stmt = scope_to_owner(
+            vendor_stmt, Vendor, owner.user_id, include_system=True
         )
-        if not vendor_q.scalar_one_or_none():
+        if not (await db.execute(vendor_stmt)).scalar_one_or_none():
             raise HTTPException(status_code=400, detail="Vendor not found")
         po.vendor_id = data.vendor_id
 
@@ -317,6 +343,7 @@ async def delete_purchase_order(
         description="If true, also detaches any reconciliations referencing this PO",
     ),
     db: AsyncSession = Depends(get_db),
+    owner: OwnerContext = Depends(get_current_owner),
 ):
     """Delete a purchase order.
 
@@ -325,15 +352,15 @@ async def delete_purchase_order(
     proceeds: reconciliation rows survive (FK is `ON DELETE SET NULL`)
     but lose their PO link, line items cascade away.
     """
-    po_q = await db.execute(
-        select(PurchaseOrder.id).where(PurchaseOrder.id == po_id)
-    )
-    if not po_q.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Purchase order not found")
+    po = await db.get(PurchaseOrder, po_id)
+    require_owned_write(po, owner.user_id, not_found="Purchase order not found")
 
     recon_count_q = await db.execute(
-        select(func.count(Reconciliation.id)).where(
-            Reconciliation.po_id == po_id
+        select(func.count(Reconciliation.id))
+        .join(Invoice, Invoice.id == Reconciliation.invoice_id)
+        .where(
+            Reconciliation.po_id == po_id,
+            Invoice.owner_id == owner.user_id,
         )
     )
     recon_count = int(recon_count_q.scalar() or 0)
@@ -352,20 +379,21 @@ async def delete_purchase_order(
         )
 
     await db.execute(
-        sql_delete(PurchaseOrder).where(PurchaseOrder.id == po_id)
+        sql_delete(PurchaseOrder).where(
+            PurchaseOrder.id == po_id,
+            PurchaseOrder.owner_id == owner.user_id,
+        )
     )
     return None
 
 
 @router.get("/purchase-orders/{po_id}", response_model=PurchaseOrderResponse)
-async def get_purchase_order(po_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    stmt = (
-        select(PurchaseOrder)
-        .options(selectinload(PurchaseOrder.line_items))
-        .where(PurchaseOrder.id == po_id)
-    )
-    result = await db.execute(stmt)
-    po = result.scalar_one_or_none()
+async def get_purchase_order(
+    po_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    owner: OwnerContext = Depends(get_current_owner),
+):
+    po = await _visible_po(db, po_id, owner.user_id)
     if not po:
         raise HTTPException(status_code=404, detail="Purchase order not found")
     return po
@@ -375,6 +403,7 @@ async def get_purchase_order(po_id: uuid.UUID, db: AsyncSession = Depends(get_db
 async def import_purchase_orders_csv(
     file: UploadFile = File(..., description="CSV with one row per line item"),
     db: AsyncSession = Depends(get_db),
+    owner: OwnerContext = Depends(get_current_owner),
 ):
     """Bulk-load purchase orders from a CSV file.
 
@@ -440,16 +469,23 @@ async def import_purchase_orders_csv(
     vendor_codes.discard("")
     vendors_by_code: dict[str, Vendor] = {}
     if vendor_codes:
-        v_result = await db.execute(
-            select(Vendor).where(Vendor.code.in_(vendor_codes))
+        v_stmt = select(Vendor).where(Vendor.code.in_(vendor_codes))
+        v_stmt = scope_to_owner(
+            v_stmt, Vendor, owner.user_id, include_system=True
         )
+        v_stmt = v_stmt.order_by(
+            case((Vendor.owner_id == owner.user_id, 0), else_=1)
+        )
+        v_result = await db.execute(v_stmt)
         for vendor in v_result.scalars():
-            vendors_by_code[vendor.code] = vendor
+            if vendor.code not in vendors_by_code:
+                vendors_by_code[vendor.code] = vendor
 
-    # Pre-load existing po_numbers to skip duplicates against DB.
+    # Pre-load existing po_numbers to skip duplicates against DB (this owner).
     existing_q = await db.execute(
         select(PurchaseOrder.po_number).where(
-            PurchaseOrder.po_number.in_(groups.keys())
+            PurchaseOrder.owner_id == owner.user_id,
+            PurchaseOrder.po_number.in_(groups.keys()),
         )
     )
     existing_po_numbers = {pn for pn in existing_q.scalars()}
@@ -558,6 +594,7 @@ async def import_purchase_orders_csv(
         notes = po_level["notes"] or None
 
         po = PurchaseOrder(
+            owner_id=owner.user_id,
             po_number=po_number,
             vendor_id=vendor.id,
             issue_date=issue_date,
@@ -600,6 +637,7 @@ async def import_purchase_orders_csv(
 async def list_invoices_matched_to_po(
     po_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    owner: OwnerContext = Depends(get_current_owner),
 ):
     """Invoices that the matcher agent reconciled against this PO.
 
@@ -607,6 +645,9 @@ async def list_invoices_matched_to_po(
     can jump straight from a PO to any invoice it produced a
     reconciliation for.
     """
+    if not await _visible_po(db, po_id, owner.user_id):
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+
     # Subquery: count of discrepancies per reconciliation
     disc_count_sq = (
         select(
@@ -633,7 +674,10 @@ async def list_invoices_matched_to_po(
             disc_count_sq,
             disc_count_sq.c.reconciliation_id == Reconciliation.id,
         )
-        .where(Reconciliation.po_id == po_id)
+        .where(
+            Reconciliation.po_id == po_id,
+            Invoice.owner_id == owner.user_id,
+        )
         .order_by(Reconciliation.created_at.desc())
     )
 

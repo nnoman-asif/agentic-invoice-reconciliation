@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import OwnerContext, get_current_owner
 from app.db.session import get_db
 from app.models.database import Discrepancy, Invoice, Reconciliation
 from app.models.schemas import DashboardStats
@@ -10,43 +11,68 @@ router = APIRouter()
 
 
 @router.get("/dashboard/stats", response_model=DashboardStats)
-async def get_dashboard_stats(db: AsyncSession = Depends(get_db)):
+async def get_dashboard_stats(
+    db: AsyncSession = Depends(get_db),
+    owner: OwnerContext = Depends(get_current_owner),
+):
+    owner_filter = Invoice.owner_id == owner.user_id
+
     # Invoice counts
-    total_inv = await db.execute(select(func.count(Invoice.id)))
+    total_inv = await db.execute(
+        select(func.count(Invoice.id)).where(owner_filter)
+    )
     total_invoices = total_inv.scalar() or 0
 
     # By processing status
-    proc_stmt = select(
-        Invoice.processing_status, func.count(Invoice.id)
-    ).group_by(Invoice.processing_status)
+    proc_stmt = (
+        select(Invoice.processing_status, func.count(Invoice.id))
+        .where(owner_filter)
+        .group_by(Invoice.processing_status)
+    )
     proc_result = await db.execute(proc_stmt)
     by_processing = {row[0]: row[1] for row in proc_result.all()}
 
     # By business status
-    biz_stmt = select(
-        Invoice.business_status, func.count(Invoice.id)
-    ).group_by(Invoice.business_status)
+    biz_stmt = (
+        select(Invoice.business_status, func.count(Invoice.id))
+        .where(owner_filter)
+        .group_by(Invoice.business_status)
+    )
     biz_result = await db.execute(biz_stmt)
     by_business = {row[0]: row[1] for row in biz_result.all()}
 
-    # Reconciliation counts
-    total_rec = await db.execute(select(func.count(Reconciliation.id)))
+    # Reconciliation counts (via owned invoices)
+    total_rec = await db.execute(
+        select(func.count(Reconciliation.id))
+        .join(Invoice, Invoice.id == Reconciliation.invoice_id)
+        .where(owner_filter)
+    )
     total_reconciliations = total_rec.scalar() or 0
 
-    match_stmt = select(
-        Reconciliation.match_type, func.count(Reconciliation.id)
-    ).group_by(Reconciliation.match_type)
+    match_stmt = (
+        select(Reconciliation.match_type, func.count(Reconciliation.id))
+        .join(Invoice, Invoice.id == Reconciliation.invoice_id)
+        .where(owner_filter)
+        .group_by(Reconciliation.match_type)
+    )
     match_result = await db.execute(match_stmt)
     match_rate = {row[0]: row[1] for row in match_result.all()}
 
     # Avg processing time
-    avg_stmt = select(func.avg(Reconciliation.processing_time_ms))
+    avg_stmt = (
+        select(func.avg(Reconciliation.processing_time_ms))
+        .join(Invoice, Invoice.id == Reconciliation.invoice_id)
+        .where(owner_filter)
+    )
     avg_result = await db.execute(avg_stmt)
     avg_time = avg_result.scalar()
 
     # Top discrepancy types (capped for chart rendering)
     disc_stmt = (
         select(Discrepancy.type, func.count(Discrepancy.id))
+        .join(Reconciliation, Reconciliation.id == Discrepancy.reconciliation_id)
+        .join(Invoice, Invoice.id == Reconciliation.invoice_id)
+        .where(owner_filter)
         .group_by(Discrepancy.type)
         .order_by(func.count(Discrepancy.id).desc())
         .limit(10)
@@ -55,9 +81,12 @@ async def get_dashboard_stats(db: AsyncSession = Depends(get_db)):
     top_discrepancies = {row[0]: row[1] for row in disc_result.all()}
 
     # Total across ALL discrepancy rows (not just the top-10 types).
-    # Without this, a UI displaying `sum(top_discrepancy_types.values())`
-    # would silently undercount whenever there are more than 10 types.
-    total_disc_q = await db.execute(select(func.count(Discrepancy.id)))
+    total_disc_q = await db.execute(
+        select(func.count(Discrepancy.id))
+        .join(Reconciliation, Reconciliation.id == Discrepancy.reconciliation_id)
+        .join(Invoice, Invoice.id == Reconciliation.invoice_id)
+        .where(owner_filter)
+    )
     total_discrepancies = total_disc_q.scalar() or 0
 
     return DashboardStats(

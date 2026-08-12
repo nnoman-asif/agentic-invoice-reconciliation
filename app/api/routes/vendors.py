@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import OwnerContext, get_current_owner, require_owned_write
 from app.db.session import get_db
 from app.models.database import (
     Invoice,
@@ -24,6 +25,7 @@ from app.models.schemas import (
     VendorResponse,
     VendorUpdate,
 )
+from app.tools.db_queries import scope_to_owner
 
 router = APIRouter()
 
@@ -31,9 +33,21 @@ VENDOR_IMPORT_REQUIRED_COLUMNS = ("code", "name")
 VENDOR_IMPORT_OPTIONAL_COLUMNS = ("tax_id", "address", "contact_email")
 
 
+async def _visible_vendor(
+    db: AsyncSession, vendor_id: uuid.UUID, owner_id: uuid.UUID
+) -> Vendor | None:
+    stmt = select(Vendor).where(Vendor.id == vendor_id)
+    stmt = scope_to_owner(stmt, Vendor, owner_id, include_system=True)
+    return (await db.execute(stmt)).scalar_one_or_none()
+
+
 @router.get("/vendors", response_model=list[VendorResponse])
-async def list_vendors(db: AsyncSession = Depends(get_db)):
+async def list_vendors(
+    db: AsyncSession = Depends(get_db),
+    owner: OwnerContext = Depends(get_current_owner),
+):
     stmt = select(Vendor).order_by(Vendor.name)
+    stmt = scope_to_owner(stmt, Vendor, owner.user_id, include_system=True)
     result = await db.execute(stmt)
     return result.scalars().all()
 
@@ -42,15 +56,24 @@ async def list_vendors(db: AsyncSession = Depends(get_db)):
 async def create_vendor(
     data: VendorCreate,
     db: AsyncSession = Depends(get_db),
+    owner: OwnerContext = Depends(get_current_owner),
 ):
-    code_q = await db.execute(select(Vendor.id).where(Vendor.code == data.code))
+    code_q = await db.execute(
+        select(Vendor.id).where(
+            Vendor.owner_id == owner.user_id,
+            Vendor.code == data.code,
+        )
+    )
     if code_q.scalar_one_or_none():
         raise HTTPException(
             status_code=409, detail=f"code {data.code!r} already exists"
         )
     if data.tax_id:
         tax_q = await db.execute(
-            select(Vendor.id).where(Vendor.tax_id == data.tax_id)
+            select(Vendor.id).where(
+                Vendor.owner_id == owner.user_id,
+                Vendor.tax_id == data.tax_id,
+            )
         )
         if tax_q.scalar_one_or_none():
             raise HTTPException(
@@ -59,6 +82,7 @@ async def create_vendor(
             )
 
     vendor = Vendor(
+        owner_id=owner.user_id,
         code=data.code,
         name=data.name,
         tax_id=data.tax_id,
@@ -75,15 +99,17 @@ async def update_vendor(
     vendor_id: uuid.UUID,
     data: VendorUpdate,
     db: AsyncSession = Depends(get_db),
+    owner: OwnerContext = Depends(get_current_owner),
 ):
     vendor = await db.get(Vendor, vendor_id)
-    if not vendor:
-        raise HTTPException(status_code=404, detail="Vendor not found")
+    require_owned_write(vendor, owner.user_id, not_found="Vendor not found")
 
     if data.code is not None and data.code != vendor.code:
         code_q = await db.execute(
             select(Vendor.id).where(
-                Vendor.code == data.code, Vendor.id != vendor_id
+                Vendor.owner_id == owner.user_id,
+                Vendor.code == data.code,
+                Vendor.id != vendor_id,
             )
         )
         if code_q.scalar_one_or_none():
@@ -96,7 +122,9 @@ async def update_vendor(
         if data.tax_id:  # only check uniqueness for non-empty values
             tax_q = await db.execute(
                 select(Vendor.id).where(
-                    Vendor.tax_id == data.tax_id, Vendor.id != vendor_id
+                    Vendor.owner_id == owner.user_id,
+                    Vendor.tax_id == data.tax_id,
+                    Vendor.id != vendor_id,
                 )
             )
             if tax_q.scalar_one_or_none():
@@ -121,6 +149,7 @@ async def update_vendor(
 async def delete_vendor(
     vendor_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    owner: OwnerContext = Depends(get_current_owner),
 ):
     """Delete a vendor.
 
@@ -129,18 +158,21 @@ async def delete_vendor(
     populated. We pre-check for a friendlier 409 response with
     counts; the IntegrityError catch is a safety net for races.
     """
-    vendor_q = await db.execute(select(Vendor.id).where(Vendor.id == vendor_id))
-    if not vendor_q.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Vendor not found")
+    vendor = await db.get(Vendor, vendor_id)
+    require_owned_write(vendor, owner.user_id, not_found="Vendor not found")
 
     po_count_q = await db.execute(
         select(func.count(PurchaseOrder.id)).where(
-            PurchaseOrder.vendor_id == vendor_id
+            PurchaseOrder.vendor_id == vendor_id,
+            PurchaseOrder.owner_id == owner.user_id,
         )
     )
     po_count = int(po_count_q.scalar() or 0)
     inv_count_q = await db.execute(
-        select(func.count(Invoice.id)).where(Invoice.vendor_id == vendor_id)
+        select(func.count(Invoice.id)).where(
+            Invoice.vendor_id == vendor_id,
+            Invoice.owner_id == owner.user_id,
+        )
     )
     inv_count = int(inv_count_q.scalar() or 0)
 
@@ -160,7 +192,12 @@ async def delete_vendor(
         )
 
     try:
-        await db.execute(sql_delete(Vendor).where(Vendor.id == vendor_id))
+        await db.execute(
+            sql_delete(Vendor).where(
+                Vendor.id == vendor_id,
+                Vendor.owner_id == owner.user_id,
+            )
+        )
     except IntegrityError as exc:  # pragma: no cover - race-safety net
         raise HTTPException(
             status_code=409,
@@ -173,6 +210,7 @@ async def delete_vendor(
 async def import_vendors_csv(
     file: UploadFile = File(..., description="CSV with one row per vendor"),
     db: AsyncSession = Depends(get_db),
+    owner: OwnerContext = Depends(get_current_owner),
 ):
     """Bulk-load vendors from a CSV file.
 
@@ -215,13 +253,16 @@ async def import_vendors_csv(
     if not rows:
         return response
 
-    # Pre-load existing codes to skip duplicates against DB.
+    # Pre-load existing codes to skip duplicates against DB (this owner).
     candidate_codes = {(r.get("code") or "").strip() for _, r in rows}
     candidate_codes.discard("")
     existing_codes: set[str] = set()
     if candidate_codes:
         existing_q = await db.execute(
-            select(Vendor.code).where(Vendor.code.in_(candidate_codes))
+            select(Vendor.code).where(
+                Vendor.owner_id == owner.user_id,
+                Vendor.code.in_(candidate_codes),
+            )
         )
         existing_codes = {c for c in existing_q.scalars()}
 
@@ -250,6 +291,7 @@ async def import_vendors_csv(
 
         seen_in_file.add(code)
         vendor = Vendor(
+            owner_id=owner.user_id,
             code=code,
             name=name,
             tax_id=(row.get("tax_id") or "").strip() or None,
@@ -272,10 +314,12 @@ async def import_vendors_csv(
 
 
 @router.get("/vendors/{vendor_id}", response_model=VendorResponse)
-async def get_vendor(vendor_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    stmt = select(Vendor).where(Vendor.id == vendor_id)
-    result = await db.execute(stmt)
-    vendor = result.scalar_one_or_none()
+async def get_vendor(
+    vendor_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    owner: OwnerContext = Depends(get_current_owner),
+):
+    vendor = await _visible_vendor(db, vendor_id, owner.user_id)
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
     return vendor
@@ -283,24 +327,38 @@ async def get_vendor(vendor_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
 
 @router.get("/vendors/{vendor_id}/purchase-orders", response_model=list[PurchaseOrderListResponse])
 async def get_vendor_purchase_orders(
-    vendor_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+    vendor_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    owner: OwnerContext = Depends(get_current_owner),
 ):
+    if not await _visible_vendor(db, vendor_id, owner.user_id):
+        raise HTTPException(status_code=404, detail="Vendor not found")
+
     stmt = (
         select(PurchaseOrder)
         .where(PurchaseOrder.vendor_id == vendor_id)
         .order_by(PurchaseOrder.created_at.desc())
     )
+    stmt = scope_to_owner(stmt, PurchaseOrder, owner.user_id, include_system=True)
     result = await db.execute(stmt)
     return result.scalars().all()
 
 
 @router.get("/vendors/{vendor_id}/invoices", response_model=list[InvoiceListResponse])
 async def get_vendor_invoices(
-    vendor_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+    vendor_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    owner: OwnerContext = Depends(get_current_owner),
 ):
+    if not await _visible_vendor(db, vendor_id, owner.user_id):
+        raise HTTPException(status_code=404, detail="Vendor not found")
+
     stmt = (
         select(Invoice)
-        .where(Invoice.vendor_id == vendor_id)
+        .where(
+            Invoice.vendor_id == vendor_id,
+            Invoice.owner_id == owner.user_id,
+        )
         .order_by(Invoice.created_at.desc())
     )
     result = await db.execute(stmt)
@@ -309,31 +367,46 @@ async def get_vendor_invoices(
 
 @router.get("/vendors/{vendor_id}/stats")
 async def get_vendor_stats(
-    vendor_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+    vendor_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    owner: OwnerContext = Depends(get_current_owner),
 ):
     """Aggregated stats for a vendor."""
-    po_count_q = await db.execute(
+    if not await _visible_vendor(db, vendor_id, owner.user_id):
+        raise HTTPException(status_code=404, detail="Vendor not found")
+
+    po_scope = scope_to_owner(
         select(func.count(PurchaseOrder.id)).where(
             PurchaseOrder.vendor_id == vendor_id
-        )
+        ),
+        PurchaseOrder,
+        owner.user_id,
+        include_system=True,
     )
-    po_count = po_count_q.scalar() or 0
+    po_count = (await db.execute(po_scope)).scalar() or 0
 
-    po_total_q = await db.execute(
+    po_total_stmt = scope_to_owner(
         select(func.coalesce(func.sum(PurchaseOrder.total_amount), 0)).where(
             PurchaseOrder.vendor_id == vendor_id
-        )
+        ),
+        PurchaseOrder,
+        owner.user_id,
+        include_system=True,
     )
-    po_total = float(po_total_q.scalar() or 0)
+    po_total = float((await db.execute(po_total_stmt)).scalar() or 0)
 
     inv_count_q = await db.execute(
-        select(func.count(Invoice.id)).where(Invoice.vendor_id == vendor_id)
+        select(func.count(Invoice.id)).where(
+            Invoice.vendor_id == vendor_id,
+            Invoice.owner_id == owner.user_id,
+        )
     )
     inv_count = inv_count_q.scalar() or 0
 
     inv_total_q = await db.execute(
         select(func.coalesce(func.sum(Invoice.total_amount), 0)).where(
-            Invoice.vendor_id == vendor_id
+            Invoice.vendor_id == vendor_id,
+            Invoice.owner_id == owner.user_id,
         )
     )
     inv_total = float(inv_total_q.scalar() or 0)
@@ -341,13 +414,17 @@ async def get_vendor_stats(
     avg_time_q = await db.execute(
         select(func.avg(Reconciliation.processing_time_ms))
         .join(Invoice, Invoice.id == Reconciliation.invoice_id)
-        .where(Invoice.vendor_id == vendor_id)
+        .where(
+            Invoice.vendor_id == vendor_id,
+            Invoice.owner_id == owner.user_id,
+        )
     )
     avg_time_ms = avg_time_q.scalar()
 
     approved_q = await db.execute(
         select(func.count(Invoice.id)).where(
             Invoice.vendor_id == vendor_id,
+            Invoice.owner_id == owner.user_id,
             Invoice.business_status == "approved",
         )
     )

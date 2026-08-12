@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
+from typing import Any
 
-from fastapi import Depends, Request
+from fastapi import Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import LOCAL_DEV_USER_ID, settings
+from app.config import LOCAL_DEV_USER_ID, SYSTEM_USER_ID, settings
 from app.db.session import get_db
 from app.models.database import User
 
@@ -23,6 +24,24 @@ class OwnerContext:
     daily_invoice_limit: int
     max_upload_mb: int
     max_pdf_pages: int
+
+
+def require_owned_write(
+    row: Any,
+    owner_id: uuid.UUID,
+    *,
+    not_found: str = "Not found",
+) -> None:
+    """Guard mutating routes: 404 if missing/foreign, 403 if system-owned."""
+    if row is None:
+        raise HTTPException(status_code=404, detail=not_found)
+    if row.owner_id == SYSTEM_USER_ID:
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot modify system-owned data",
+        )
+    if row.owner_id != owner_id:
+        raise HTTPException(status_code=404, detail=not_found)
 
 
 async def get_current_owner(

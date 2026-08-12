@@ -7,9 +7,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.api.deps import OwnerContext, get_current_owner
 from app.config import settings
 from app.db.session import get_db
-from app.models.database import Invoice, InvoiceLineItem, Reconciliation
+from app.models.database import Invoice, Reconciliation
 from app.models.schemas import (
     InvoiceListResponse,
     InvoiceResponse,
@@ -33,10 +34,12 @@ async def upload_invoice(
     request: Request,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
+    owner: OwnerContext = Depends(get_current_owner),
 ):
     # ── Validation ─────────────────────────────────────────────────
     # Size cap (early exit before reading body)
-    if file.size is not None and file.size > settings.max_upload_size_mb * 1024 * 1024:
+    max_mb = min(settings.max_upload_size_mb, owner.max_upload_mb)
+    if file.size is not None and file.size > max_mb * 1024 * 1024:
         raise HTTPException(status_code=413, detail="File too large")
     if file.size == 0:
         raise HTTPException(status_code=400, detail="File is empty")
@@ -84,6 +87,7 @@ async def upload_invoice(
 
     invoice = Invoice(
         id=invoice_id,
+        owner_id=owner.user_id,
         processing_status="queued",
         business_status="pending",
         raw_file_path=file_path,
@@ -121,8 +125,13 @@ async def list_invoices(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
+    owner: OwnerContext = Depends(get_current_owner),
 ):
-    stmt = select(Invoice).order_by(Invoice.created_at.desc())
+    stmt = (
+        select(Invoice)
+        .where(Invoice.owner_id == owner.user_id)
+        .order_by(Invoice.created_at.desc())
+    )
 
     if processing_status:
         stmt = stmt.where(Invoice.processing_status == processing_status)
@@ -137,11 +146,18 @@ async def list_invoices(
 
 
 @router.get("/invoices/{invoice_id}", response_model=InvoiceResponse)
-async def get_invoice(invoice_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def get_invoice(
+    invoice_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    owner: OwnerContext = Depends(get_current_owner),
+):
     stmt = (
         select(Invoice)
         .options(selectinload(Invoice.line_items))
-        .where(Invoice.id == invoice_id)
+        .where(
+            Invoice.id == invoice_id,
+            Invoice.owner_id == owner.user_id,
+        )
     )
     result = await db.execute(stmt)
     invoice = result.scalar_one_or_none()
@@ -154,7 +170,17 @@ async def get_invoice(invoice_id: uuid.UUID, db: AsyncSession = Depends(get_db))
 async def get_invoice_reconciliation(
     invoice_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    owner: OwnerContext = Depends(get_current_owner),
 ):
+    inv_q = await db.execute(
+        select(Invoice.id).where(
+            Invoice.id == invoice_id,
+            Invoice.owner_id == owner.user_id,
+        )
+    )
+    if not inv_q.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
     stmt = (
         select(Reconciliation)
         .options(

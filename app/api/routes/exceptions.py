@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import OwnerContext, get_current_owner
 from app.db.session import get_db
 from app.models.database import HumanReview, Invoice, Reconciliation
 from app.models.schemas import (
@@ -17,11 +18,36 @@ from app.models.schemas import (
 router = APIRouter()
 
 
+async def _owned_reconciliation(
+    db: AsyncSession,
+    reconciliation_id: uuid.UUID,
+    owner_id: uuid.UUID,
+) -> Reconciliation:
+    stmt = (
+        select(Reconciliation)
+        .join(Invoice, Invoice.id == Reconciliation.invoice_id)
+        .where(
+            Reconciliation.id == reconciliation_id,
+            Invoice.owner_id == owner_id,
+        )
+    )
+    recon = (await db.execute(stmt)).scalar_one_or_none()
+    if not recon:
+        raise HTTPException(status_code=404, detail="Reconciliation not found")
+    return recon
+
+
 @router.get("/exceptions", response_model=list[InvoiceListResponse])
-async def list_exceptions(db: AsyncSession = Depends(get_db)):
+async def list_exceptions(
+    db: AsyncSession = Depends(get_db),
+    owner: OwnerContext = Depends(get_current_owner),
+):
     stmt = (
         select(Invoice)
-        .where(Invoice.business_status == "pending_review")
+        .where(
+            Invoice.owner_id == owner.user_id,
+            Invoice.business_status == "pending_review",
+        )
         .order_by(Invoice.updated_at.desc())
     )
     result = await db.execute(stmt)
@@ -33,15 +59,9 @@ async def approve_exception(
     reconciliation_id: uuid.UUID,
     body: ReviewRequest,
     db: AsyncSession = Depends(get_db),
+    owner: OwnerContext = Depends(get_current_owner),
 ):
-    stmt = (
-        select(Reconciliation)
-        .where(Reconciliation.id == reconciliation_id)
-    )
-    result = await db.execute(stmt)
-    recon = result.scalar_one_or_none()
-    if not recon:
-        raise HTTPException(status_code=404, detail="Reconciliation not found")
+    recon = await _owned_reconciliation(db, reconciliation_id, owner.user_id)
     if recon.overall_status != "pending_review":
         raise HTTPException(status_code=400, detail="Reconciliation is not pending review")
 
@@ -56,9 +76,11 @@ async def approve_exception(
     recon.overall_status = "approved"
     recon.updated_at = datetime.now(timezone.utc)
 
-    inv_stmt = select(Invoice).where(Invoice.id == recon.invoice_id)
-    inv_result = await db.execute(inv_stmt)
-    invoice = inv_result.scalar_one()
+    inv_stmt = select(Invoice).where(
+        Invoice.id == recon.invoice_id,
+        Invoice.owner_id == owner.user_id,
+    )
+    invoice = (await db.execute(inv_stmt)).scalar_one()
     invoice.business_status = "approved"
     invoice.updated_at = datetime.now(timezone.utc)
 
@@ -76,12 +98,9 @@ async def reject_exception(
     reconciliation_id: uuid.UUID,
     body: ReviewRequest,
     db: AsyncSession = Depends(get_db),
+    owner: OwnerContext = Depends(get_current_owner),
 ):
-    stmt = select(Reconciliation).where(Reconciliation.id == reconciliation_id)
-    result = await db.execute(stmt)
-    recon = result.scalar_one_or_none()
-    if not recon:
-        raise HTTPException(status_code=404, detail="Reconciliation not found")
+    recon = await _owned_reconciliation(db, reconciliation_id, owner.user_id)
     if recon.overall_status != "pending_review":
         raise HTTPException(status_code=400, detail="Reconciliation is not pending review")
 
@@ -96,9 +115,11 @@ async def reject_exception(
     recon.overall_status = "rejected"
     recon.updated_at = datetime.now(timezone.utc)
 
-    inv_stmt = select(Invoice).where(Invoice.id == recon.invoice_id)
-    inv_result = await db.execute(inv_stmt)
-    invoice = inv_result.scalar_one()
+    inv_stmt = select(Invoice).where(
+        Invoice.id == recon.invoice_id,
+        Invoice.owner_id == owner.user_id,
+    )
+    invoice = (await db.execute(inv_stmt)).scalar_one()
     invoice.business_status = "rejected"
     invoice.updated_at = datetime.now(timezone.utc)
 
@@ -115,6 +136,7 @@ async def override_exception(
     reconciliation_id: uuid.UUID,
     body: OverrideRequest,
     db: AsyncSession = Depends(get_db),
+    owner: OwnerContext = Depends(get_current_owner),
 ):
     """Flip a previously auto-approved reconciliation to approved or
     rejected, with a mandatory reason. Use this when the agent
@@ -122,11 +144,7 @@ async def override_exception(
     intervention. (The standard approve/reject endpoints reject
     auto-approved recons by design.)
     """
-    stmt = select(Reconciliation).where(Reconciliation.id == reconciliation_id)
-    result = await db.execute(stmt)
-    recon = result.scalar_one_or_none()
-    if not recon:
-        raise HTTPException(status_code=404, detail="Reconciliation not found")
+    recon = await _owned_reconciliation(db, reconciliation_id, owner.user_id)
     if recon.overall_status != "auto_approved":
         raise HTTPException(
             status_code=400,
@@ -147,9 +165,11 @@ async def override_exception(
     recon.overall_status = body.decision
     recon.updated_at = datetime.now(timezone.utc)
 
-    inv_stmt = select(Invoice).where(Invoice.id == recon.invoice_id)
-    inv_result = await db.execute(inv_stmt)
-    invoice = inv_result.scalar_one()
+    inv_stmt = select(Invoice).where(
+        Invoice.id == recon.invoice_id,
+        Invoice.owner_id == owner.user_id,
+    )
+    invoice = (await db.execute(inv_stmt)).scalar_one()
     invoice.business_status = body.decision
     invoice.updated_at = datetime.now(timezone.utc)
 

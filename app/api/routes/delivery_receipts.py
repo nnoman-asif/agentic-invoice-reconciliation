@@ -5,12 +5,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.api.deps import OwnerContext, get_current_owner
 from app.db.session import get_db
-from app.models.database import DeliveryLineItem, DeliveryReceipt
+from app.models.database import DeliveryLineItem, DeliveryReceipt, PurchaseOrder
 from app.models.schemas import (
     DeliveryReceiptCreate,
     DeliveryReceiptResponse,
 )
+from app.tools.db_queries import scope_to_owner
 
 router = APIRouter()
 
@@ -21,11 +23,15 @@ async def list_delivery_receipts(
         None, description="Filter to receipts for a specific purchase order"
     ),
     db: AsyncSession = Depends(get_db),
+    owner: OwnerContext = Depends(get_current_owner),
 ):
     stmt = (
         select(DeliveryReceipt)
         .options(selectinload(DeliveryReceipt.line_items))
         .order_by(DeliveryReceipt.created_at.desc())
+    )
+    stmt = scope_to_owner(
+        stmt, DeliveryReceipt, owner.user_id, include_system=True
     )
     if po_id is not None:
         stmt = stmt.where(DeliveryReceipt.po_id == po_id)
@@ -37,8 +43,31 @@ async def list_delivery_receipts(
 async def create_delivery_receipt(
     data: DeliveryReceiptCreate,
     db: AsyncSession = Depends(get_db),
+    owner: OwnerContext = Depends(get_current_owner),
 ):
+    # PO must be visible (own or system) so receipts can attach to demo POs.
+    po_stmt = select(PurchaseOrder).where(PurchaseOrder.id == data.po_id)
+    po_stmt = scope_to_owner(
+        po_stmt, PurchaseOrder, owner.user_id, include_system=True
+    )
+    po = (await db.execute(po_stmt)).scalar_one_or_none()
+    if not po:
+        raise HTTPException(status_code=400, detail="Purchase order not found")
+
+    existing_q = await db.execute(
+        select(DeliveryReceipt.id).where(
+            DeliveryReceipt.owner_id == owner.user_id,
+            DeliveryReceipt.receipt_number == data.receipt_number,
+        )
+    )
+    if existing_q.scalar_one_or_none():
+        raise HTTPException(
+            status_code=409,
+            detail=f"receipt_number {data.receipt_number!r} already exists",
+        )
+
     receipt = DeliveryReceipt(
+        owner_id=owner.user_id,
         receipt_number=data.receipt_number,
         po_id=data.po_id,
         received_date=data.received_date,
@@ -72,11 +101,18 @@ async def create_delivery_receipt(
 
 
 @router.get("/delivery-receipts/{receipt_id}", response_model=DeliveryReceiptResponse)
-async def get_delivery_receipt(receipt_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def get_delivery_receipt(
+    receipt_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    owner: OwnerContext = Depends(get_current_owner),
+):
     stmt = (
         select(DeliveryReceipt)
         .options(selectinload(DeliveryReceipt.line_items))
         .where(DeliveryReceipt.id == receipt_id)
+    )
+    stmt = scope_to_owner(
+        stmt, DeliveryReceipt, owner.user_id, include_system=True
     )
     result = await db.execute(stmt)
     receipt = result.scalar_one_or_none()

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import OwnerContext, get_current_owner
 from app.db.session import get_db
 from app.models.database import Invoice
 
@@ -14,6 +15,7 @@ router = APIRouter()
 async def webhook_invoice_received(
     request: Request,
     db: AsyncSession = Depends(get_db),
+    owner: OwnerContext = Depends(get_current_owner),
 ):
     """Trigger processing for an invoice that's already in the DB (e.g., from an ERP push)."""
     body = await request.json()
@@ -26,7 +28,10 @@ async def webhook_invoice_received(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid invoice_id format")
 
-    stmt = select(Invoice).where(Invoice.id == inv_uuid)
+    stmt = select(Invoice).where(
+        Invoice.id == inv_uuid,
+        Invoice.owner_id == owner.user_id,
+    )
     result = await db.execute(stmt)
     invoice = result.scalar_one_or_none()
     if not invoice:
