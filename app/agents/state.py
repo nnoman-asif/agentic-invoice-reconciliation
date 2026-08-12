@@ -44,7 +44,6 @@ class ReconciliationState(TypedDict, total=False):
     confidence_score: float
     agent_recommendation: str
     recommendation_reasoning: str
-    similar_cases: list[dict]
 
     # Metadata
     trace_id: str | None

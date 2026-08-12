@@ -400,7 +400,7 @@ class ReviewRequest(BaseModel):
     """Body for /exceptions/{id}/approve and /exceptions/{id}/reject.
 
     `decided_by` is required so every human review has a real
-    accountable reviewer recorded for audit / RAG learning.
+    accountable reviewer recorded for audit.
     """
     reviewer_notes: str | None = None
     decided_by: str = Field(min_length=1)

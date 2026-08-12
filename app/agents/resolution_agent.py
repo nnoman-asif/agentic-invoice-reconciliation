@@ -11,7 +11,7 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-RESOLUTION_SYSTEM_PROMPT = """You are a financial reconciliation expert. Given an invoice reconciliation summary and any similar past cases, provide a clear recommendation.
+RESOLUTION_SYSTEM_PROMPT = """You are a financial reconciliation expert. Given an invoice reconciliation summary, provide a clear recommendation.
 
 You MUST respond with valid JSON only:
 {
@@ -24,15 +24,13 @@ Guidelines:
 - "approve": No significant issues, safe to pay
 - "review": Has issues that need human judgment
 - "reject": Clear violations (duplicates, unauthorized vendors, major discrepancies)
-- Higher confidence = more certain about the recommendation
-- Reference similar past cases if provided"""
+- Higher confidence = more certain about the recommendation"""
 
 
 def resolve(state: dict) -> dict:
-    """Decide on approval, rejection, or human review based on anomalies and past cases."""
+    """Decide on approval, rejection, or human review based on anomalies."""
     invoice_id = state["invoice_id"]
     discrepancies = state.get("discrepancies", [])
-    similar_cases = state.get("similar_cases", [])
     logger.info(f"[ResolutionAgent] Resolving invoice {invoice_id}")
 
     # Fast path: no discrepancies = auto-approve
@@ -74,17 +72,9 @@ def resolve(state: dict) -> dict:
         format="json",
     )
 
-    context_parts = [f"Reconciliation summary:\n{summary}"]
-    if similar_cases:
-        cases_text = "\n".join(
-            f"- {c.get('content_summary', 'N/A')} -> Decision: {c.get('decision', 'N/A')}"
-            for c in similar_cases
-        )
-        context_parts.append(f"\nSimilar past cases:\n{cases_text}")
-
     messages = [
         ("system", RESOLUTION_SYSTEM_PROMPT),
-        ("human", "\n".join(context_parts)),
+        ("human", f"Reconciliation summary:\n{summary}"),
     ]
 
     try:

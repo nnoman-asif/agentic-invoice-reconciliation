@@ -1,11 +1,10 @@
-"""Canonical embedding access for the matcher and RAG modules.
+"""Canonical embedding access for the matcher.
 
 All embedding calls go through this module so a future provider swap
 (Ollama -> Gemini / Groq / etc.) is a one-file change. Dimension is
-1024 to match the existing pgvector columns; changing providers that
-emit a different size requires migrating both
-`po_line_items.description_embedding` and
-`reconciliation_embeddings.embedding` together.
+1024 to match the existing `po_line_items.description_embedding`
+pgvector column; changing providers that emit a different size
+requires migrating that column.
 """
 
 from __future__ import annotations

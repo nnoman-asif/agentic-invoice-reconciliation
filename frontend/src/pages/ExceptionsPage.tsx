@@ -378,7 +378,7 @@ export function ExceptionsPage() {
             <DialogDescription>
               {dialogIsBulk
                 ? "Your note and reviewer name will be applied to every selected invoice."
-                : "Add an optional note explaining your decision. This will be stored for audit and used by the RAG retriever for future similar cases."}
+                : "Add an optional note explaining your decision. This will be stored for audit."}
             </DialogDescription>
           </DialogHeader>
 

@@ -113,8 +113,7 @@ export function SettingsPage() {
               <p className="text-muted-foreground leading-relaxed">
                 A production-grade, multi-agent system that automates 3-way
                 invoice matching using LangGraph, with human-in-the-loop for
-                exceptions, RAG over historical decisions, and full
-                observability via Langfuse.
+                exceptions and full observability via Langfuse.
               </p>
               <div className="grid grid-cols-2 gap-3 pt-2">
                 {[

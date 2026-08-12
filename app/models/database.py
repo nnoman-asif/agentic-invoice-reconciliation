@@ -88,8 +88,8 @@ class POLineItem(Base):
     unit_of_measure: Mapped[str | None] = mapped_column(String(20))
     # Cached embedding of `item_description`. Fetched by po_id, never
     # searched by similarity — no HNSW index. Dimension must stay in
-    # lockstep with reconciliation_embeddings.embedding; changing the
-    # embedding provider requires migrating both columns.
+    # lockstep with the active embedding provider; changing providers
+    # that emit a different size requires migrating this column.
     description_embedding: Mapped[list[float] | None] = mapped_column(Vector(1024), nullable=True)
 
     purchase_order: Mapped["PurchaseOrder"] = relationship(back_populates="line_items")
@@ -215,7 +215,6 @@ class Reconciliation(Base):
     line_item_matches: Mapped[list["LineItemMatch"]] = relationship(back_populates="reconciliation", cascade="all, delete-orphan")
     discrepancies: Mapped[list["Discrepancy"]] = relationship(back_populates="reconciliation", cascade="all, delete-orphan")
     human_reviews: Mapped[list["HumanReview"]] = relationship(back_populates="reconciliation", cascade="all, delete-orphan")
-    embeddings: Mapped[list["ReconciliationEmbedding"]] = relationship(back_populates="reconciliation", cascade="all, delete-orphan")
 
     __table_args__ = (
         CheckConstraint(
@@ -289,20 +288,4 @@ class HumanReview(Base):
 
     __table_args__ = (
         Index("idx_hr_rec_id", "reconciliation_id"),
-    )
-
-
-class ReconciliationEmbedding(Base):
-    __tablename__ = "reconciliation_embeddings"
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    reconciliation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("reconciliations.id", ondelete="CASCADE"), nullable=False)
-    embedding = mapped_column(Vector(1024), nullable=False)
-    content_summary: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
-
-    reconciliation: Mapped["Reconciliation"] = relationship(back_populates="embeddings")
-
-    __table_args__ = (
-        Index("idx_re_rec_id", "reconciliation_id"),
     )

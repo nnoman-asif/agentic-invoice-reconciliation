@@ -68,7 +68,7 @@ const STAGES: { id: AgentStage; label: string; description: string }[] = [
   {
     id: "resolution",
     label: "Resolution",
-    description: "LLM + RAG decides auto-approve or human review",
+    description: "LLM recommends; deterministic rules decide auto-approve or human review",
   },
 ]
 

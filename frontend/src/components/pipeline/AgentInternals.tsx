@@ -66,7 +66,7 @@ Runs 8 deterministic checks:
 
 Each anomaly is tagged with severity (critical / warning / info).`,
 
-  resolution: `You are a financial reconciliation expert. Given an invoice reconciliation summary and any similar past cases, provide a clear recommendation.
+  resolution: `You are a financial reconciliation expert. Given an invoice reconciliation summary, provide a clear recommendation.
 
 You MUST respond with valid JSON only:
 {
@@ -79,8 +79,7 @@ Guidelines:
 - "approve": No significant issues, safe to pay
 - "review": Has issues that need human judgment
 - "reject": Clear violations (duplicates, unauthorized vendors, major discrepancies)
-- Higher confidence = more certain about the recommendation
-- Reference similar past cases (RAG-retrieved) if provided`,
+- Higher confidence = more certain about the recommendation`,
 }
 
 interface Props {
@@ -314,7 +313,6 @@ function getStageInputShape(stage: AgentStage): Record<string, unknown> {
     case "resolution":
       return {
         discrepancies: "Array<Discrepancy>",
-        similar_cases: "Array<RAGCase>",
         line_item_matches: "Array<LineItemMatch>",
       }
   }

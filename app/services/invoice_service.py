@@ -39,7 +39,6 @@ _NODE_TO_STATUS_AFTER: dict[str, str] = {
     "parse_invoice": "matching",
     "match_records": "detecting",
     "detect_anomalies": "resolving",
-    "rag_retrieve": "resolving",
 }
 
 
@@ -235,9 +234,6 @@ def _record_node_trace(trace, node_name: str, state: dict, elapsed_ms: float) ->
             "is_duplicate": state.get("is_duplicate"),
         }
         inp = {"line_matches_count": len(state.get("line_item_matches", []))}
-    elif node_name == "rag_retrieve":
-        out = {"similar_cases_found": len(state.get("similar_cases", []))}
-        inp = {"query": "similar reconciliation cases"}
     elif node_name == "resolve":
         out = {
             "match_type": state.get("match_type"),
@@ -247,7 +243,6 @@ def _record_node_trace(trace, node_name: str, state: dict, elapsed_ms: float) ->
         }
         inp = {
             "discrepancies_count": len(state.get("discrepancies", [])),
-            "similar_cases_count": len(state.get("similar_cases", [])),
         }
     else:
         # error_handler and any future nodes

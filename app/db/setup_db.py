@@ -1,6 +1,6 @@
 """
 Standalone database setup script.
-Creates all 12 tables with correct types, constraints, indices, and FK cascade rules.
+Creates all 11 tables with correct types, constraints, indices, and FK cascade rules.
 
 Usage:
     python -m app.db.setup_db
@@ -282,24 +282,6 @@ CREATE TABLE IF NOT EXISTS human_reviews (
 
 CREATE INDEX IF NOT EXISTS idx_hr_rec_id ON human_reviews (reconciliation_id);
 
--- ============================================================
--- 12. reconciliation_embeddings
--- ============================================================
-CREATE TABLE IF NOT EXISTS reconciliation_embeddings (
-    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    reconciliation_id   UUID           NOT NULL,
-    embedding           vector(1024)   NOT NULL,
-    content_summary     TEXT           NOT NULL,
-    created_at          TIMESTAMPTZ    NOT NULL DEFAULT now(),
-
-    CONSTRAINT fk_re_rec FOREIGN KEY (reconciliation_id)
-        REFERENCES reconciliations (id) ON DELETE CASCADE
-);
-
-CREATE INDEX IF NOT EXISTS idx_re_rec_id ON reconciliation_embeddings (reconciliation_id);
-CREATE INDEX IF NOT EXISTS idx_re_embedding ON reconciliation_embeddings
-    USING hnsw (embedding vector_cosine_ops);
-
 -- Idempotent migration: CREATE TABLE IF NOT EXISTS does not add
 -- columns to an existing table.
 ALTER TABLE po_line_items
@@ -308,7 +290,6 @@ ALTER TABLE po_line_items
 """
 
 DROP_ALL_SQL = """
-DROP TABLE IF EXISTS reconciliation_embeddings CASCADE;
 DROP TABLE IF EXISTS human_reviews CASCADE;
 DROP TABLE IF EXISTS discrepancies CASCADE;
 DROP TABLE IF EXISTS line_item_matches CASCADE;
@@ -340,7 +321,7 @@ def create_tables():
     try:
         with conn.cursor() as cur:
             cur.execute(TABLES_SQL)
-        print("[setup_db] All 12 tables created successfully.")
+        print("[setup_db] All 11 tables created successfully.")
     except Exception as e:
         print(f"[setup_db] Error creating tables: {e}")
         sys.exit(1)

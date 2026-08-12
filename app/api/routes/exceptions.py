@@ -1,37 +1,20 @@
-import logging
 import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
 from app.models.database import HumanReview, Invoice, Reconciliation
 from app.models.schemas import (
     InvoiceListResponse,
     OverrideRequest,
-    ReconciliationResponse,
     ReviewRequest,
     HumanReviewResponse,
 )
-from app.rag.indexer import index_reconciliation
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-async def _index_safely(db: AsyncSession, reconciliation_id: uuid.UUID) -> None:
-    """Index a reconciliation for RAG; never let an indexing failure
-    bubble up and reverse the human review the user just made."""
-    try:
-        await index_reconciliation(db, reconciliation_id)
-    except Exception as e:
-        logger.warning(
-            f"[Exceptions] RAG indexing failed for {reconciliation_id}: {e}"
-        )
 
 
 @router.get("/exceptions", response_model=list[InvoiceListResponse])
@@ -85,11 +68,6 @@ async def approve_exception(
     # ensuring the POST response matches what GET returns later.
     await db.refresh(review)
 
-    # Capture the (now-decided) reconciliation in the RAG store so the
-    # resolution agent can reference this human decision next time a
-    # similar case appears.
-    await _index_safely(db, reconciliation_id)
-
     return review
 
 
@@ -126,7 +104,6 @@ async def reject_exception(
 
     await db.flush()
     await db.refresh(review)
-    await _index_safely(db, reconciliation_id)
     return review
 
 
@@ -178,5 +155,4 @@ async def override_exception(
 
     await db.flush()
     await db.refresh(review)
-    await _index_safely(db, reconciliation_id)
     return review

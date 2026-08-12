@@ -1,6 +1,6 @@
 # Agentic Invoice Reconciliation
 
-A production-grade, full-stack multi-agent system that automates 3-way invoice matching (Purchase Order vs Invoice vs Delivery Receipt) using LangGraph, with human-in-the-loop for exceptions, RAG over historical decisions, full observability via Langfuse, and an Apple-quality React frontend featuring a live pipeline visualizer, side-by-side document comparison, and a 3D reconciliation flow.
+A production-grade, full-stack multi-agent system that automates 3-way invoice matching (Purchase Order vs Invoice vs Delivery Receipt) using LangGraph, with human-in-the-loop for exceptions, full observability via Langfuse, and an Apple-quality React frontend featuring a live pipeline visualizer, side-by-side document comparison, and a 3D reconciliation flow.
 
 ![Demo](docs/animation.gif)
 
@@ -34,7 +34,7 @@ A production-grade, full-stack multi-agent system that automates 3-way invoice m
               |                          +-------v----+ |
               |                          | Resolution | |
               |                          |   Agent    | |
-              |                          | (LLM+RAG)  | |
+              |                          |   (LLM)    | |
               |                          +------+-----+ |
               +---------------------------------+-------+
                                                 |
@@ -55,7 +55,7 @@ Infrastructure: PostgreSQL+pgvector | Redis | Ollama (Qwen 2.5 7B) | Langfuse
 | Layer | Technology | Purpose |
 |---|---|---|
 | LLM | Qwen 2.5 7B (via Ollama) | Invoice parsing, resolution recommendations |
-| Embeddings | Qwen3-Embedding-0.6B (via Ollama) | 1024-dim vectors for RAG + description matching |
+| Embeddings | Qwen3-Embedding-0.6B (via Ollama) | 1024-dim vectors for description matching |
 | Agent Framework | LangGraph | Stateful agent orchestration with checkpointing |
 | Backend | FastAPI (async) | REST API with webhook support |
 | Database | PostgreSQL 16 + pgvector | Structured data + vector similarity search |
@@ -85,7 +85,6 @@ Infrastructure: PostgreSQL+pgvector | Redis | Ollama (Qwen 2.5 7B) | Langfuse
 - **3-Way Line-Item Matching**: Compares invoice line items against PO and delivery receipt data at the individual line level
 - **8 Anomaly Detection Checks**: Duplicate invoices, price deviations, quantity mismatches, missing POs, missing receipts, date anomalies, amount overages, unauthorized vendors
 - **Human-in-the-Loop**: Exceptions route to humans via API with agent-generated recommendations
-- **RAG Over Historical Decisions**: Past reconciliation outcomes are embedded and retrieved to improve future recommendations
 - **Full Observability**: Every agent step traced via Langfuse with processing time metrics
 - **Production-Ready**: Docker deployment, async processing, Redis queuing, health checks
 
@@ -102,7 +101,7 @@ Infrastructure: PostgreSQL+pgvector | Redis | Ollama (Qwen 2.5 7B) | Langfuse
 
 ## Database Schema
 
-12 normalized tables with proper FK constraints, CHECK constraints, and indices:
+11 normalized tables with proper FK constraints, CHECK constraints, and indices:
 
 ```
 vendors ---< purchase_orders ---< po_line_items
@@ -115,7 +114,6 @@ invoices ---< invoice_line_items
               |                    |
               +---< discrepancies -+
               +---< human_reviews
-              +---< reconciliation_embeddings (pgvector)
 ```
 
 ## Prerequisites
@@ -353,9 +351,10 @@ Interactive API docs available at **http://localhost:8000/docs** (Swagger UI).
                                                   | 4. Resolution     |
                                                   |    Agent          |
                                                   |                   |
-                                                  | LLM + RAG decides |
-                                                  | auto-approve or   |
-                                                  | human review      |
+                                                  | LLM recommends;    |
+                                                  | rules decide       |
+                                                  | auto-approve or    |
+                                                  | human review       |
                                                   +-------------------+
 ```
 
