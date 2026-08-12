@@ -5,9 +5,7 @@ from __future__ import annotations
 import json
 import logging
 
-from langchain_ollama import ChatOllama
-
-from app.config import settings
+from app.tools.llm import get_chat_model
 
 logger = logging.getLogger(__name__)
 
@@ -65,12 +63,7 @@ def resolve(state: dict) -> dict:
     # Serious discrepancies -- use LLM for recommendation
     summary = _build_summary(state)
 
-    llm = ChatOllama(
-        model=settings.ollama_llm_model,
-        base_url=settings.ollama_base_url,
-        temperature=0,
-        format="json",
-    )
+    llm = get_chat_model(json_mode=True)
 
     messages = [
         ("system", RESOLUTION_SYSTEM_PROMPT),

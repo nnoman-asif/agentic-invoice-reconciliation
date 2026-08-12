@@ -24,7 +24,16 @@ class Settings(BaseSettings):
     redis_port: int = 6379
     redis_db: int = 0
 
-    # Ollama
+    # LLM provider: "ollama" (local) or "gemini" (remote)
+    llm_provider: str = "ollama"
+    gemini_api_key: str = ""
+    # Empty = provider default (see resolved_* properties). Set explicitly
+    # when switching providers, e.g. gemini-2.0-flash / gemini-embedding-2 / 1536.
+    chat_model: str = ""
+    embedding_model: str = ""
+    embedding_dim: int = 0
+
+    # Ollama connection + legacy env aliases (OLLAMA_LLM_MODEL etc.)
     ollama_base_url: str = "http://localhost:11434"
     ollama_llm_model: str = "qwen2.5:7b"
     ollama_embedding_model: str = "qwen3-embedding:0.6b"
@@ -65,6 +74,30 @@ class Settings(BaseSettings):
     demo_runs_per_day: int = 3
     # Only trust CF-Connecting-IP when the app sits behind the Cloudflare Worker.
     trust_proxy_header: bool = False
+
+    @property
+    def resolved_chat_model(self) -> str:
+        if self.chat_model:
+            return self.chat_model
+        if (self.llm_provider or "").strip().lower() == "gemini":
+            return "gemini-2.0-flash"
+        return self.ollama_llm_model or "qwen2.5:7b"
+
+    @property
+    def resolved_embedding_model(self) -> str:
+        if self.embedding_model:
+            return self.embedding_model
+        if (self.llm_provider or "").strip().lower() == "gemini":
+            return "gemini-embedding-2"
+        return self.ollama_embedding_model or "qwen3-embedding:0.6b"
+
+    @property
+    def resolved_embedding_dim(self) -> int:
+        if self.embedding_dim:
+            return self.embedding_dim
+        if (self.llm_provider or "").strip().lower() == "gemini":
+            return 1536
+        return self.ollama_embedding_dim or 1024
 
     @property
     def database_url(self) -> str:

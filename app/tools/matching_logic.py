@@ -5,7 +5,11 @@ from dataclasses import dataclass
 import numpy as np
 
 from app.config import settings
-from app.tools.embeddings import cosine_similarity_matrix, get_embeddings_batch
+from app.tools.embeddings import (
+    cosine_similarity_matrix,
+    embedding_cache_usable,
+    get_embeddings_batch,
+)
 
 
 @dataclass
@@ -34,7 +38,7 @@ def match_line_items(
     invoice_lines: list[dict],
     po_lines: list[dict],
     delivery_lines: list[dict],
-    similarity_threshold: float = 0.7,
+    similarity_threshold: float = 0.7,  # tuned vs Qwen3; re-check before trusting Gemini
 ) -> list[LineMatchResult]:
     """
     Perform 3-way matching of invoice lines against PO and delivery lines.
@@ -59,12 +63,16 @@ def match_line_items(
         return results
 
     # One batch for all invoice descriptions, plus any PO lines that
-    # arrived without a cached embedding (matcher should have filled
-    # those already; this is a defensive fallback).
+    # arrived without a usable cached embedding (model/dim mismatch is a
+    # cache miss so Ollama and Gemini vectors are never mixed).
     texts: list[str] = [inv.get("item_description", "") for inv in invoice_lines]
     po_uncached_indices: list[int] = []
     for j, po in enumerate(po_lines):
-        if po.get("description_embedding") is None:
+        if not embedding_cache_usable(
+            po.get("embedding_model"),
+            po.get("embedding_dim"),
+            po.get("description_embedding"),
+        ):
             po_uncached_indices.append(j)
             texts.append(po.get("item_description", ""))
 
@@ -79,7 +87,11 @@ def match_line_items(
     inv_embeddings: list[list[float] | None] = [None] * n
     po_embeddings: list[list[float] | None] = [
         list(po["description_embedding"])
-        if po.get("description_embedding") is not None
+        if embedding_cache_usable(
+            po.get("embedding_model"),
+            po.get("embedding_dim"),
+            po.get("description_embedding"),
+        )
         else None
         for po in po_lines
     ]

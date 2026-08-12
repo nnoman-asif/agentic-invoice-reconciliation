@@ -5,9 +5,7 @@ from __future__ import annotations
 import json
 import logging
 
-from langchain_ollama import ChatOllama
-
-from app.config import settings
+from app.tools.llm import get_chat_model
 from app.tools.pdf_extractor import extract_invoice_text
 
 logger = logging.getLogger(__name__)
@@ -25,7 +23,7 @@ Extract the following fields:
   "invoice_date": "YYYY-MM-DD format",
   "due_date": "YYYY-MM-DD format if present, else null",
   "total_amount": numeric value (no currency symbol),
-  "tax_amount": numeric value if present, else null,
+  "tax_amount": numeric value if present, else null",
   "currency": "3-letter currency code, default USD",
   "line_items": [
     {
@@ -71,12 +69,7 @@ def parse_invoice(state: dict) -> dict:
     if not raw_text.strip():
         return {**state, "error": "No text could be extracted from the invoice file"}
 
-    llm = ChatOllama(
-        model=settings.ollama_llm_model,
-        base_url=settings.ollama_base_url,
-        temperature=0,
-        format="json",
-    )
+    llm = get_chat_model(json_mode=True)
 
     messages = [
         ("system", PARSER_SYSTEM_PROMPT),

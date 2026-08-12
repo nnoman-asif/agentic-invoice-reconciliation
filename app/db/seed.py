@@ -242,8 +242,14 @@ def seed_delivery_receipts(cur):
 
 def seed_po_embeddings(cur):
     """Precompute system PO line embeddings so demo runs skip embedding calls."""
-    from app.tools.embeddings import get_embeddings_batch
+    from app.tools.embeddings import (
+        active_embedding_dim,
+        active_embedding_model,
+        get_embeddings_batch,
+    )
 
+    model = active_embedding_model()
+    dim = active_embedding_dim()
     cur.execute(
         """
         SELECT pli.id, pli.item_description
@@ -257,8 +263,8 @@ def seed_po_embeddings(cur):
         """,
         (
             SYSTEM_USER_ID,
-            settings.ollama_embedding_model,
-            settings.ollama_embedding_dim,
+            model,
+            dim,
         ),
     )
     rows = cur.fetchall()
@@ -270,7 +276,6 @@ def seed_po_embeddings(cur):
     texts = [r[1] for r in rows]
     print(f"  [seed] Embedding {len(texts)} PO line description(s)...")
     vectors = get_embeddings_batch(texts)
-    model = settings.ollama_embedding_model
 
     for line_id, vec in zip(ids, vectors):
         literal = "[" + ",".join(str(float(x)) for x in vec) + "]"
@@ -282,7 +287,7 @@ def seed_po_embeddings(cur):
                    embedding_dim = %s
              WHERE id = %s
             """,
-            (literal, model, len(vec), line_id),
+            (literal, model, dim, line_id),
         )
     print(f"  [seed] {len(vectors)} PO line embeddings written.")
 

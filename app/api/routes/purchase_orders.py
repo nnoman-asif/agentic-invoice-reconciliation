@@ -30,7 +30,11 @@ from app.models.schemas import (
     PurchaseOrderUpdate,
 )
 from app.tools.db_queries import scope_to_owner
-from app.tools.embeddings import get_embeddings_batch
+from app.tools.embeddings import (
+    active_embedding_dim,
+    active_embedding_model,
+    get_embeddings_batch,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +49,12 @@ def _embed_po_lines(lines: list[POLineItem]) -> None:
         return
     try:
         vectors = get_embeddings_batch([li.item_description for li in lines])
+        model = active_embedding_model()
+        dim = active_embedding_dim()
         for li, vec in zip(lines, vectors):
             li.description_embedding = vec
+            li.embedding_model = model
+            li.embedding_dim = dim
     except Exception as e:
         logger.warning(
             "[PO] Failed to embed %d line description(s): %s",
@@ -55,6 +63,8 @@ def _embed_po_lines(lines: list[POLineItem]) -> None:
         )
         for li in lines:
             li.description_embedding = None
+            li.embedding_model = None
+            li.embedding_dim = None
 
 PO_IMPORT_REQUIRED_COLUMNS = (
     "po_number",

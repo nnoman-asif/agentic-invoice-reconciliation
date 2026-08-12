@@ -26,6 +26,10 @@ langgraph-checkpoint-postgres
 langchain-ollama
 ollama
 
+# Gemini (optional; used when LLM_PROVIDER=gemini)
+langchain-google-genai
+google-genai
+
 # PDF Processing
 PyMuPDF
 
