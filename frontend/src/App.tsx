@@ -1,4 +1,4 @@
-import { useMemo } from "react"
+import { lazy, Suspense, useMemo } from "react"
 import { Routes, Route, useLocation, useNavigate } from "react-router-dom"
 
 import { AppShell } from "@/components/layout/AppShell"
@@ -23,15 +23,28 @@ import { LoginPage } from "@/pages/LoginPage"
 import { DashboardPage } from "@/pages/DashboardPage"
 import { InboxPage } from "@/pages/InboxPage"
 import { InvoiceDetailPage } from "@/pages/InvoiceDetailPage"
-import { CompareViewPage } from "@/pages/CompareViewPage"
 import { PipelinePage } from "@/pages/PipelinePage"
-import { FlowPage } from "@/pages/FlowPage"
 import { ExceptionsPage } from "@/pages/ExceptionsPage"
 import { PurchaseOrdersPage } from "@/pages/PurchaseOrdersPage"
 import { DeliveryReceiptsPage } from "@/pages/DeliveryReceiptsPage"
 import { VendorsPage } from "@/pages/VendorsPage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import { NotFoundPage } from "@/pages/NotFoundPage"
+
+const FlowPage = lazy(() =>
+  import("@/pages/FlowPage").then((m) => ({ default: m.FlowPage }))
+)
+const CompareViewPage = lazy(() =>
+  import("@/pages/CompareViewPage").then((m) => ({ default: m.CompareViewPage }))
+)
+
+function RouteFallback() {
+  return (
+    <div className="min-h-[50vh] flex items-center justify-center">
+      <div className="size-8 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+    </div>
+  )
+}
 
 export default function App() {
   useTheme() // initialize theme
@@ -73,10 +86,21 @@ export default function App() {
               <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
               <Route
                 path="/invoices/:id/compare"
-                element={<CompareViewPage />}
+                element={
+                  <Suspense fallback={<RouteFallback />}>
+                    <CompareViewPage />
+                  </Suspense>
+                }
               />
               <Route path={ROUTES.pipeline} element={<PipelinePage />} />
-              <Route path={ROUTES.flow} element={<FlowPage />} />
+              <Route
+                path={ROUTES.flow}
+                element={
+                  <Suspense fallback={<RouteFallback />}>
+                    <FlowPage />
+                  </Suspense>
+                }
+              />
               <Route path={ROUTES.exceptions} element={<ExceptionsPage />} />
               <Route
                 path={ROUTES.purchaseOrders}

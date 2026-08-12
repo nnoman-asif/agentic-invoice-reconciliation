@@ -44,12 +44,17 @@ class Settings(BaseSettings):
     app_port: int = 8000
     app_env: str = "development"
     app_debug: bool = True
+    # Comma-separated browser origins for CORS (credentials enabled).
+    allowed_origins: str = (
+        "http://localhost:5173,http://localhost:3000,"
+        "http://127.0.0.1:5173,http://127.0.0.1:3000"
+    )
 
-    # Langfuse
+    # Langfuse — empty host means localhost in development, cloud otherwise.
     langfuse_enabled: bool = False
     langfuse_secret_key: str = ""
     langfuse_public_key: str = ""
-    langfuse_host: str = "http://localhost:3000"
+    langfuse_host: str = ""
 
     # Agent Config
     price_deviation_threshold: float = 5.0
@@ -116,6 +121,18 @@ class Settings(BaseSettings):
         if (self.llm_provider or "").strip().lower() == "gemini":
             return 1536
         return self.ollama_embedding_dim or 1024
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [o.strip() for o in self.allowed_origins.split(",") if o.strip()]
+
+    @property
+    def resolved_langfuse_host(self) -> str:
+        if self.langfuse_host:
+            return self.langfuse_host
+        if (self.app_env or "").strip().lower() == "development":
+            return "http://localhost:3000"
+        return "https://cloud.langfuse.com"
 
     @property
     def database_url(self) -> str:

@@ -207,6 +207,15 @@ async def assert_accepting_work(redis: Redis) -> None:
         )
 
 
+async def get_system_quota_status(redis: Redis) -> tuple[str, bool]:
+    """Return ``(healthy|limited, llm_paused)`` without a user context."""
+    paused = bool(await redis.exists(LLM_PAUSED_KEY))
+    raw = await redis.get(_global_key())
+    used = int(raw or 0)
+    limited = paused or used >= settings.global_chat_daily_cap
+    return ("limited" if limited else "healthy"), paused
+
+
 async def get_quota_snapshot(
     redis: Redis,
     *,

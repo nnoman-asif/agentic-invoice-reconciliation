@@ -1,0 +1,104 @@
+# Production stack: postgres, redis, API, and the queue worker.
+# Do not publish 5432/6379. The API listens on 8000 for the Cloudflare Worker.
+#
+#   docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+#
+# POSTGRES_PASSWORD must be set in .env and must not be the local-dev
+# value `postgres`. Generate one on the VM, e.g.:
+#   python -c "import secrets; print(secrets.token_urlsafe(24))"
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: ira_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-invoice_reconciliation}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # No host ports — only the app/worker network can reach the DB.
+
+  redis:
+    image: redis:7-alpine
+    container_name: ira_redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # No host ports — only the app/worker network can reach Redis.
+
+  app:
+    build: .
+    container_name: ira_app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      APP_ENV: production
+      APP_DEBUG: "false"
+      TRUST_PROXY_HEADER: "true"
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  worker:
+    build: .
+    container_name: ira_worker
+    restart: unless-stopped
+    command: python -m app.worker
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      APP_ENV: production
+      APP_DEBUG: "false"
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads_data:

@@ -27,11 +27,11 @@ def get_langfuse():
 
     try:
         from langfuse import Langfuse
-        logger.info(f"[Tracing] Connecting to Langfuse at {settings.langfuse_host}")
+        logger.info(f"[Tracing] Connecting to Langfuse at {settings.resolved_langfuse_host}")
         _langfuse_client = Langfuse(
             secret_key=settings.langfuse_secret_key,
             public_key=settings.langfuse_public_key,
-            base_url=settings.langfuse_host,
+            base_url=settings.resolved_langfuse_host,
         )
         if _langfuse_client.auth_check():
             logger.info("[Tracing] Langfuse client authenticated successfully")
@@ -45,19 +45,36 @@ def get_langfuse():
         return None
 
 
-def create_trace(invoice_id: str, name: str = "invoice_reconciliation") -> Any | None:
+def create_trace(
+    invoice_id: str,
+    name: str = "invoice_reconciliation",
+    user_id: str | None = None,
+) -> Any | None:
     """Create a new Langfuse trace for an invoice processing run."""
     client = get_langfuse()
     if not client:
         return None
 
     try:
+        metadata: dict[str, Any] = {
+            "invoice_id": invoice_id,
+            "type": "reconciliation",
+        }
+        if user_id:
+            metadata["user_id"] = user_id
         observation = client.start_as_current_observation(
             as_type="span",
             name=name,
-            metadata={"invoice_id": invoice_id, "type": "reconciliation"},
+            metadata=metadata,
         )
         trace = observation.__enter__()
+        if user_id:
+            try:
+                client.update_current_trace(user_id=user_id)
+            except Exception:
+                updater = getattr(trace, "update_trace", None)
+                if callable(updater):
+                    updater(user_id=user_id)
         logger.info(f"[Tracing] Created trace for invoice {invoice_id}")
         return trace
     except Exception as e:

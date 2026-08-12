@@ -490,6 +490,11 @@ class HealthResponse(BaseModel):
     postgres: str
     redis: str
     ollama: str
+    chat_provider: str
+    embedding_provider: str
+    queue_depth: int | None = None
+    quota_status: str = "unknown"
+    llm_paused: bool = False
 
 
 # ── Auth ──────────────────────────────────────────────────────────

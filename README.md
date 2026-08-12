@@ -422,6 +422,13 @@ python -m app.db.seed
 docker compose down
 ```
 
+Production (Oracle VM + Firebase Hosting + Cloudflare Worker): see
+[docs/deploy.md](docs/deploy.md).
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+```
+
 ## License
 
 All Rights Reserved

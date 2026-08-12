@@ -1,0 +1,7 @@
+# Keep the Always Free VM from idle-reclamation, and run nightly retention.
+# Install on the Oracle VM (crontab -e) after the prod stack is up.
+#
+# Paths assume the repo lives at /opt/invoice-reconciliation — adjust.
+
+*/5 * * * * curl -fsS http://127.0.0.1:8000/health >/dev/null || true
+15 3 * * * cd /opt/invoice-reconciliation && docker compose -f docker-compose.prod.yml --env-file .env exec -T app python -m app.tasks.cleanup >> /var/log/ira-cleanup.log 2>&1

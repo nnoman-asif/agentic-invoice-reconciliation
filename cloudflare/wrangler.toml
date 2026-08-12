@@ -1,0 +1,9 @@
+name = "ira-api-proxy"
+main = "src/worker.js"
+compatibility_date = "2026-08-01"
+
+# Public origin the SPA calls. Point a custom hostname at this Worker.
+# The Worker fetches the Oracle VM over HTTP on port 8000.
+
+[vars]
+ORIGIN = "http://158.101.254.173:8000"

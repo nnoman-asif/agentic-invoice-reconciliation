@@ -89,8 +89,6 @@ async def process_invoice(invoice_id: uuid.UUID, db: AsyncSession) -> str:
     logger.info(f"[InvoiceService] Processing invoice {invoice_id}")
     start_time = time.time()
 
-    trace = create_trace(str(invoice_id))
-
     stmt = select(Invoice).where(Invoice.id == invoice_id)
     result = await db.execute(stmt)
     invoice = result.scalar_one_or_none()
@@ -100,6 +98,8 @@ async def process_invoice(invoice_id: uuid.UUID, db: AsyncSession) -> str:
             "(possible upload-vs-worker race; will retry)"
         )
         return OUTCOME_SKIPPED_NOT_FOUND
+
+    trace = create_trace(str(invoice_id), user_id=str(invoice.owner_id))
 
     invoice.processing_status = "parsing"
     invoice.updated_at = datetime.now(timezone.utc)

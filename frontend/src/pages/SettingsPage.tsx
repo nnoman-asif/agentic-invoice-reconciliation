@@ -437,6 +437,16 @@ export function SettingsPage() {
                 { label: "PostgreSQL", value: health?.postgres },
                 { label: "Redis", value: health?.redis },
                 { label: "Ollama", value: health?.ollama },
+                { label: "Chat provider", value: health?.chat_provider },
+                { label: "Embedding provider", value: health?.embedding_provider },
+                {
+                  label: "Queue depth",
+                  value:
+                    health?.queue_depth == null
+                      ? undefined
+                      : String(health.queue_depth),
+                },
+                { label: "Quota", value: health?.quota_status },
               ].map((svc) => (
                 <div
                   key={svc.label}
@@ -444,7 +454,18 @@ export function SettingsPage() {
                 >
                   <span className="font-medium">{svc.label}</span>
                   <Badge
-                    variant={svc.value === "healthy" ? "success" : "destructive"}
+                    variant={
+                      svc.value === "healthy" ||
+                      svc.value === "skipped" ||
+                      (svc.label === "Queue depth" && svc.value != null) ||
+                      svc.label.endsWith("provider")
+                        ? "success"
+                        : svc.value === "limited" || svc.value === "degraded"
+                          ? "warning"
+                          : svc.value === "unhealthy"
+                            ? "destructive"
+                            : "muted"
+                    }
                   >
                     {svc.value ?? "unknown"}
                   </Badge>

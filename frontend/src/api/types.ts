@@ -350,6 +350,11 @@ export interface HealthResponse {
   postgres: string
   redis: string
   ollama: string
+  chat_provider: string
+  embedding_provider: string
+  queue_depth: number | null
+  quota_status: string
+  llm_paused: boolean
 }
 
 export interface ReviewRequest {

@@ -49,6 +49,11 @@ coverage.xml
 *.log
 logs/
 
+# Firebase / Wrangler
+.firebase/
+firebase-debug.log
+.wrangler/
+
 # Misc
 *.bak
 *.tmp
