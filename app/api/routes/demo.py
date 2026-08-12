@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import shutil
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -26,6 +25,7 @@ from app.tools.limits import (
     release_inflight,
 )
 from app.tools.quota import assert_accepting_work
+from app.tools.storage import get_storage
 
 logger = logging.getLogger(__name__)
 
@@ -183,10 +183,9 @@ async def run_demo_scenario(
     invoice_id = uuid.uuid4()
     await acquire_inflight(redis, owner_id, invoice_id)
 
-    dest = Path(settings.upload_dir) / f"{invoice_id}.pdf"
-    dest.parent.mkdir(parents=True, exist_ok=True)
     try:
-        shutil.copyfile(scenario.pdf_path, dest)
+        pdf_bytes = Path(scenario.pdf_path).read_bytes()
+        file_path = get_storage().write_bytes(f"{invoice_id}.pdf", pdf_bytes)
     except Exception:
         await release_inflight(redis, owner_id, invoice_id)
         raise
@@ -196,7 +195,7 @@ async def run_demo_scenario(
         owner_id=owner_id,
         processing_status="queued",
         business_status="pending",
-        raw_file_path=str(dest),
+        raw_file_path=file_path,
         file_content_type="application/pdf",
         po_reference=scenario.po_number,
     )

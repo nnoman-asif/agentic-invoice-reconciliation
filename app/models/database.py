@@ -348,6 +348,10 @@ class HumanReview(Base):
 
     reconciliation: Mapped["Reconciliation"] = relationship(back_populates="human_reviews")
 
+    __table_args__ = (
+        Index("idx_hr_rec_id", "reconciliation_id"),
+    )
+
 
 class QuotaRequest(Base):
     """Durable record of a user asking for a higher daily invoice limit."""
@@ -372,8 +376,4 @@ class QuotaRequest(Base):
         ),
         Index("idx_quota_requests_user_id", "user_id"),
         Index("idx_quota_requests_status", "status"),
-    )
-
-    __table_args__ = (
-        Index("idx_hr_rec_id", "reconciliation_id"),
     )

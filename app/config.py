@@ -69,6 +69,9 @@ class Settings(BaseSettings):
     firebase_credentials_json: str = ""
     secret_key: str = "dev-only-change-me"
     inactive_account_days: int = 7
+    guest_retention_hours: int = 24
+    # PDF binaries older than this are deleted; invoice row + raw_text remain.
+    pdf_retention_days: int = 7
 
     # Demo
     demo_runs_per_day: int = 3

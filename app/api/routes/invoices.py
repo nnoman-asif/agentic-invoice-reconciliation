@@ -4,6 +4,7 @@ import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -28,6 +29,7 @@ from app.tools.limits import (
 )
 from app.tools.pdf_validation import PDF_MAGIC, validate_pdf
 from app.tools.quota import assert_accepting_work
+from app.tools.storage import get_storage
 
 logger = logging.getLogger(__name__)
 
@@ -152,10 +154,13 @@ async def upload_invoice(
     await acquire_inflight(redis, owner.user_id, invoice_id)
 
     # ── Persist file + DB row ──────────────────────────────────────
-    file_path = f"{settings.upload_dir}/{invoice_id}{ext or '.pdf'}"
-    Path(file_path).parent.mkdir(parents=True, exist_ok=True)
-    with open(file_path, "wb") as f:
-        f.write(content)
+    try:
+        file_path = get_storage().write_bytes(
+            f"{invoice_id}{ext or '.pdf'}", content
+        )
+    except Exception:
+        await release_inflight(redis, owner.user_id, invoice_id)
+        raise
 
     invoice = Invoice(
         id=invoice_id,
@@ -258,6 +263,46 @@ async def get_invoice(
         invoice,
         queue_position=queue_position,
         provider_throttled=throttled,
+    )
+
+
+@router.get("/invoices/{invoice_id}/file")
+async def get_invoice_file(
+    invoice_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    owner: OwnerContext = Depends(get_current_owner),
+):
+    """Stream the original PDF for the owning caller only."""
+    stmt = select(Invoice).where(
+        Invoice.id == invoice_id,
+        Invoice.owner_id == owner.user_id,
+    )
+    result = await db.execute(stmt)
+    invoice = result.scalar_one_or_none()
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    if invoice.file_deleted_at is not None:
+        raise HTTPException(
+            status_code=410,
+            detail="Original document expired",
+        )
+
+    path = get_storage().resolve_stored(invoice.raw_file_path)
+    if path is None or not path.exists():
+        raise HTTPException(status_code=404, detail="Invoice file not found")
+
+    media = invoice.file_content_type or "application/pdf"
+    return FileResponse(
+        path,
+        media_type=media,
+        filename=path.name,
+        content_disposition_type="inline",
+        headers={
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'; sandbox",
+            "Cache-Control": "private, no-store",
+        },
     )
 
 

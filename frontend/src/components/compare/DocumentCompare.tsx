@@ -10,7 +10,7 @@ import { ConfidenceBar } from "@/components/shared/ConfidenceBar"
 import { EmptyState } from "@/components/shared/EmptyState"
 import { NoMatches } from "@/components/shared/illustrations/NoMatches"
 import type { Invoice, Reconciliation } from "@/api/types"
-import { API_BASE_URL } from "@/api/client"
+import { apiClient } from "@/api/client"
 import { cn } from "@/lib/utils"
 
 interface Props {
@@ -37,10 +37,48 @@ export function DocumentCompare({ invoice, reconciliation }: Props) {
   const middleRef = useRef<HTMLDivElement>(null)
   const [hovered, setHovered] = useState<string | null>(null)
   const [linePositions, setLinePositions] = useState<LinePosition[]>([])
+  const [fileUrl, setFileUrl] = useState<string | null>(null)
+  const [fileError, setFileError] = useState<"expired" | "missing" | null>(
+    null
+  )
 
-  const fileUrl = invoice.raw_file_path
-    ? `${API_BASE_URL}/${invoice.raw_file_path}`
-    : null
+  // Authenticated blob fetch — the public /uploads mount is gone.
+  useEffect(() => {
+    if (invoice.file_deleted_at) {
+      setFileError("expired")
+      setFileUrl(null)
+      return
+    }
+
+    let objectUrl: string | null = null
+    let cancelled = false
+
+    ;(async () => {
+      try {
+        const { data } = await apiClient.get<Blob>(
+          `/api/invoices/${invoice.id}/file`,
+          { responseType: "blob" }
+        )
+        if (cancelled) return
+        objectUrl = URL.createObjectURL(data)
+        setFileUrl(objectUrl)
+        setFileError(null)
+      } catch (err: unknown) {
+        if (cancelled) return
+        const status =
+          err && typeof err === "object" && "response" in err
+            ? (err as { response?: { status?: number } }).response?.status
+            : undefined
+        setFileError(status === 410 ? "expired" : "missing")
+        setFileUrl(null)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [invoice.id, invoice.file_deleted_at, invoice.raw_file_path])
 
   // Recompute the SVG endpoints whenever the layout changes. Anchors:
   //   * left side  = `[data-line-source="<invoiceLineId>"]` -- one of
@@ -144,7 +182,13 @@ export function DocumentCompare({ invoice, reconciliation }: Props) {
       >
         {/* COL 1 -- the original PDF */}
         <div className="flex flex-col lg:border-r border-border/60 bg-card overflow-hidden">
-          {fileUrl ? <PDFViewer fileUrl={fileUrl} /> : <PdfUnavailable />}
+          {fileError === "expired" ? (
+            <PdfExpired />
+          ) : fileUrl ? (
+            <PDFViewer fileUrl={fileUrl} />
+          ) : (
+            <PdfUnavailable />
+          )}
         </div>
 
         {/* COL 2 -- parsed line items (always present so match lines have
@@ -267,6 +311,21 @@ export function DocumentCompare({ invoice, reconciliation }: Props) {
             )}
           </div>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function PdfExpired() {
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-border/60 bg-muted/30">
+        <FileText className="size-4 text-muted-foreground" />
+        <span className="text-sm font-medium">Invoice</span>
+      </div>
+      <div className="flex-1 flex items-center justify-center p-6 text-center text-sm text-muted-foreground">
+        Original document expired. Parsed text and reconciliation results
+        remain available.
       </div>
     </div>
   )

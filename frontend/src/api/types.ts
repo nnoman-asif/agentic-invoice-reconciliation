@@ -106,6 +106,7 @@ export interface Invoice {
   business_status: BusinessStatus
   raw_file_path: string | null
   file_content_type: string | null
+  file_deleted_at?: string | null
   parsed_data: Record<string, unknown> | null
   error_message: string | null
   created_at: string

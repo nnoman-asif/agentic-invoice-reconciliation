@@ -310,6 +310,7 @@ class InvoiceResponse(BaseModel):
     business_status: str
     raw_file_path: str | None
     file_content_type: str | None
+    file_deleted_at: datetime | None = None
     parsed_data: dict | None
     error_message: str | None
     created_at: datetime
