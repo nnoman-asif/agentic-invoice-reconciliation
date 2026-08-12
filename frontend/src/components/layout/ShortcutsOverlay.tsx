@@ -51,6 +51,7 @@ function buildGroups(): Group[] {
         { keys: ["G", "I"], label: "Go to Inbox", mode: "sequence" },
         { keys: ["G", "E"], label: "Go to Exceptions", mode: "sequence" },
         { keys: ["G", "P"], label: "Go to Purchase Orders", mode: "sequence" },
+        { keys: ["G", "R"], label: "Go to Delivery Receipts", mode: "sequence" },
         { keys: ["G", "V"], label: "Go to Vendors", mode: "sequence" },
         { keys: ["G", "L"], label: "Go to Pipeline", mode: "sequence" },
         { keys: ["G", "F"], label: "Go to 3D Flow", mode: "sequence" },

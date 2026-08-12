@@ -41,7 +41,7 @@ export function ImportButton({
   entity,
   templateUrl,
   importMutation,
-  label = "Import CSV",
+  label = "Import CSV / Excel",
   size = "sm",
 }: ImportButtonProps) {
   const [open, setOpen] = useState(false)
@@ -72,6 +72,11 @@ export function ImportButton({
       return
     }
     try {
+      const isSpreadsheet = /\.xlsx$/i.test(next.name)
+      if (isSpreadsheet) {
+        setPreview(null)
+        return
+      }
       const text = await next.text()
       const lines = text.split(/\r?\n/).filter((l) => l.length > 0)
       setPreview(lines.slice(0, PREVIEW_ROWS + 1))
@@ -131,8 +136,8 @@ export function ImportButton({
           <DialogHeader>
             <DialogTitle className="capitalize">Import {entity}</DialogTitle>
             <DialogDescription>
-              Upload a CSV file. Rows that already exist or fail validation
-              will be skipped — the rest will still be imported.
+              Upload a CSV or Excel (.xlsx) file. Rows that already exist or
+              fail validation will be skipped — the rest will still be imported.
             </DialogDescription>
           </DialogHeader>
 
@@ -155,7 +160,7 @@ export function ImportButton({
               <input
                 ref={inputRef}
                 type="file"
-                accept=".csv,text/csv"
+                accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 className="hidden"
                 onChange={(e) =>
                   handleFileSelected(e.target.files?.[0] ?? null)
@@ -163,7 +168,7 @@ export function ImportButton({
               />
               <FileText className="size-6 mx-auto mb-2 text-muted-foreground" />
               <div className="text-sm font-medium">
-                {file ? file.name : "Click to choose a CSV file"}
+                {file ? file.name : "Click to choose a CSV or Excel file"}
               </div>
               <div className="text-xs text-muted-foreground mt-0.5">
                 {file

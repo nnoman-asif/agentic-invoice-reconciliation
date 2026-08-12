@@ -43,6 +43,7 @@ httpx
 tenacity
 numpy
 itsdangerous
+openpyxl
 
 # Auth
 firebase-admin

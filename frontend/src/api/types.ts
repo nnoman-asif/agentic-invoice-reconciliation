@@ -235,6 +235,36 @@ export interface ImportResponse {
   errors: ImportRowResult[]
 }
 
+export interface DeliveryLineItemInput {
+  po_line_item_id: string | null
+  item_description: string
+  quantity_received: number
+  quantity_accepted: number
+  quantity_rejected: number
+}
+
+/** Body for POST /api/delivery-receipts. */
+export interface DeliveryReceiptCreate {
+  receipt_number: string
+  po_id: string
+  received_date: string
+  receiver_name: string | null
+  status: string
+  notes: string | null
+  line_items: DeliveryLineItemInput[]
+}
+
+/** Body for PUT /api/delivery-receipts/{id}. All fields optional. */
+export interface DeliveryReceiptUpdate {
+  receipt_number?: string
+  po_id?: string
+  received_date?: string
+  receiver_name?: string | null
+  status?: string
+  notes?: string | null
+  line_items?: DeliveryLineItemInput[]
+}
+
 export interface DeliveryReceipt {
   id: string
   receipt_number: string

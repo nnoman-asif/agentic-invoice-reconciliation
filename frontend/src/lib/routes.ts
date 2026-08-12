@@ -7,6 +7,7 @@ export const ROUTES = {
   compareView: (id: string) => `/invoices/${id}/compare`,
   exceptions: "/exceptions",
   purchaseOrders: "/purchase-orders",
+  deliveryReceipts: "/delivery-receipts",
   vendors: "/vendors",
   pipeline: "/pipeline",
   flow: "/flow",

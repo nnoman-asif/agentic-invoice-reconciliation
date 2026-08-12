@@ -5,6 +5,8 @@ import {
   Inbox,
   AlertTriangle,
   ShoppingCart,
+  Truck,
+  Building2,
   Workflow,
   Sparkles,
   Settings,
@@ -91,6 +93,14 @@ export function CommandPalette() {
           <CommandItem onSelect={() => go(ROUTES.purchaseOrders)}>
             <ShoppingCart />
             <HighlightedText text="Purchase Orders" query={search} />
+          </CommandItem>
+          <CommandItem onSelect={() => go(ROUTES.deliveryReceipts)}>
+            <Truck />
+            <HighlightedText text="Delivery Receipts" query={search} />
+          </CommandItem>
+          <CommandItem onSelect={() => go(ROUTES.vendors)}>
+            <Building2 />
+            <HighlightedText text="Vendors" query={search} />
           </CommandItem>
           <CommandItem onSelect={() => go(ROUTES.pipeline)}>
             <Workflow />

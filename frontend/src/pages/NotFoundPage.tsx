@@ -132,6 +132,8 @@ export function NotFoundPage() {
                 { to: ROUTES.dashboard, label: "Dashboard" },
                 { to: ROUTES.inbox, label: "Invoice Inbox" },
                 { to: ROUTES.exceptions, label: "Exceptions" },
+                { to: ROUTES.purchaseOrders, label: "Purchase Orders" },
+                { to: ROUTES.deliveryReceipts, label: "Delivery Receipts" },
                 { to: ROUTES.pipeline, label: "Pipeline Visualizer" },
                 { to: ROUTES.flow, label: "3D Flow" },
                 { to: ROUTES.settings, label: "Settings" },

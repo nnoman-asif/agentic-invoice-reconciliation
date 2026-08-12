@@ -1,0 +1,5 @@
+receipt_number,po_number,received_date,receiver_name,status,notes,po_line_number,item_description,quantity_received,quantity_accepted,quantity_rejected
+REC-2026-101,PO-2026-101,2026-03-12,Alex Rivera,received,Dock 2,1,Steel Bolts M10x60mm Grade 8.8,400,400,0
+REC-2026-101,PO-2026-101,2026-03-12,Alex Rivera,received,Dock 2,2,Flat Washers M10 Stainless Steel,800,790,10
+REC-2026-102,PO-2026-102,2026-03-18,Sam Chen,partial,Short on 3mm sheets,1,Cold Rolled Steel Sheet 2mm 1m x 2m,30,30,0
+REC-2026-102,PO-2026-102,2026-03-18,Sam Chen,partial,Short on 3mm sheets,2,Cold Rolled Steel Sheet 3mm 1m x 2m,10,10,0

@@ -1,5 +1,3 @@
-import csv
-import io
 import logging
 import uuid
 from datetime import date, datetime
@@ -35,6 +33,7 @@ from app.tools.embeddings import (
     active_embedding_model,
     get_embeddings_batch,
 )
+from app.tools.tabular import TabularError, read_tabular
 
 logger = logging.getLogger(__name__)
 
@@ -411,50 +410,38 @@ async def get_purchase_order(
 
 @router.post("/purchase-orders/import", response_model=ImportResponse)
 async def import_purchase_orders_csv(
-    file: UploadFile = File(..., description="CSV with one row per line item"),
+    file: UploadFile = File(..., description="CSV or XLSX with one row per line item"),
     db: AsyncSession = Depends(get_db),
     owner: OwnerContext = Depends(get_current_owner),
 ):
-    """Bulk-load purchase orders from a CSV file.
+    """Bulk-load purchase orders from a CSV or Excel file.
 
     One row per line item; rows sharing a `po_number` are grouped into
     a single PO. PO-level columns (vendor, issue date, currency, …)
     must be consistent within each group.
 
     Always returns 200 so the UI can render partial-success details:
-    `{imported, skipped, errors}`. Only unparseable CSVs return 400.
+    `{imported, skipped, errors}`. Only unparseable files return 400.
     """
     raw = await file.read()
-    if not raw:
-        raise HTTPException(status_code=400, detail="CSV file is empty")
     try:
-        text = raw.decode("utf-8-sig")
-    except UnicodeDecodeError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=f"CSV must be UTF-8 encoded ({exc.reason})",
-        ) from exc
+        fieldnames, rows = read_tabular(file.filename, raw)
+    except TabularError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    reader = csv.DictReader(io.StringIO(text))
-    if not reader.fieldnames:
-        raise HTTPException(
-            status_code=400,
-            detail="CSV has no header row",
-        )
-
-    fieldnames_lower = {fn.strip().lower() for fn in reader.fieldnames}
+    fieldnames_lower = set(fieldnames)
     missing = [c for c in PO_IMPORT_REQUIRED_COLUMNS if c not in fieldnames_lower]
     if missing:
         raise HTTPException(
             status_code=400,
-            detail=f"CSV missing required columns: {', '.join(missing)}",
+            detail=f"File missing required columns: {', '.join(missing)}",
         )
 
     response = ImportResponse()
 
     # Group rows by po_number, preserving first-seen row number.
     groups: dict[str, dict] = {}  # po_number -> {first_row, rows: [(row_no, dict)]}
-    for idx, row in enumerate(reader, start=2):  # header is row 1
+    for idx, row in rows:
         po_number = (row.get("po_number") or "").strip()
         if not po_number:
             response.errors.append(

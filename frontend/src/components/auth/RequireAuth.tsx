@@ -6,7 +6,11 @@ import { ROUTES } from "@/lib/routes"
 import { useAuthStore } from "@/store/auth"
 
 /** Pages that require a signed-in (non-guest) account when auth is on. */
-const WRITE_PATHS = [ROUTES.vendors, ROUTES.purchaseOrders] as const
+const WRITE_PATHS = [
+  ROUTES.vendors,
+  ROUTES.purchaseOrders,
+  ROUTES.deliveryReceipts,
+] as const
 
 function isWritePath(pathname: string): boolean {
   return WRITE_PATHS.some(
@@ -19,7 +23,7 @@ function isWritePath(pathname: string): boolean {
  *
  * - Auth off: always allow (local-dev backend).
  * - Auth on: Firebase user or guest token required; guests are redirected
- *   away from write-oriented pages (vendors / purchase orders).
+ *   away from write-oriented pages (vendors / POs / receipts).
  */
 export function RequireAuth() {
   const location = useLocation()

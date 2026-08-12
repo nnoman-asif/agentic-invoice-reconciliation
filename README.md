@@ -254,8 +254,9 @@ curl http://localhost:8000/api/vendors/{vendor_id}/purchase-orders          # PO
 curl http://localhost:8000/api/vendors/{vendor_id}/invoices                 # invoices from this vendor
 curl http://localhost:8000/api/vendors/{vendor_id}/stats                    # aggregated counts
 
-# Delivery receipts (filter by PO with ?po_id=)
+# Delivery receipts
 curl "http://localhost:8000/api/delivery-receipts?po_id={po_id}"
+curl http://localhost:8000/api/delivery-receipts/{receipt_id}
 
 # Dashboard stats
 curl http://localhost:8000/api/dashboard/stats
@@ -264,25 +265,27 @@ curl http://localhost:8000/api/dashboard/stats
 curl http://localhost:8000/health
 ```
 
-POs and vendors also support write operations:
-`POST /api/{purchase-orders,vendors}` to create,
-`PUT /api/{purchase-orders,vendors}/{id}` to update,
-`DELETE /api/{purchase-orders,vendors}/{id}` to remove.
+POs, vendors, and delivery receipts support write operations:
+`POST /api/{purchase-orders,vendors,delivery-receipts}` to create,
+`PUT /api/{purchase-orders,vendors,delivery-receipts}/{id}` to update,
+`DELETE /api/{purchase-orders,vendors,delivery-receipts}/{id}` to remove.
 
 POs return **409** on `DELETE` when reconciliations reference them
-(pass `?force=true` to detach and delete anyway). Vendors return
-**409** when POs or invoices reference them — those references must
-be reassigned or removed first (the schema FKs are `RESTRICT`).
+(pass `?force=true` to detach and delete anyway). Delivery receipts
+return **409** when line-item matches reference them (same `?force=true`
+detach). Vendors return **409** when POs or invoices reference them —
+those references must be reassigned or removed first (the schema FKs
+are `RESTRICT`).
 Full request/response shapes live in the Swagger UI at
 **http://localhost:8000/docs**.
 
-### Bulk CSV Imports
+### Bulk CSV / Excel Imports
 
-Both purchase orders and vendors can be loaded in bulk from a CSV
-file. Use the **Import CSV** button on the Purchase Orders or Vendors
-page in the UI, or call the endpoints directly. Both return HTTP 200
-with `{imported, skipped, errors}` so partial success is supported —
-only an unparseable file returns 400.
+Vendors, purchase orders, and delivery receipts can be loaded in bulk
+from a CSV or `.xlsx` file. Use the **Import CSV / Excel** button on
+the corresponding page, or call the endpoints directly. All three
+return HTTP 200 with `{imported, skipped, errors}` so partial success
+is supported — only an unparseable file returns 400.
 
 **Purchase orders** — one row per *line item*; rows sharing a
 `po_number` are grouped into a single PO. PO-level columns must be
@@ -307,6 +310,22 @@ code,name,tax_id,address,contact_email
 ```bash
 curl -X POST http://localhost:8000/api/vendors/import \
   -F "file=@frontend/public/samples/vendors-template.csv"
+```
+
+**Delivery receipts** — one row per *line item*; rows sharing a
+`receipt_number` are grouped into a single receipt. Receipt-level
+columns (`po_number`, `received_date`, `receiver_name`, `status`,
+`notes`) must be identical within each group. Optional `po_line_number`
+links a line to the matching PO line; if `quantity_rejected` is
+omitted it is computed as received minus accepted.
+
+```
+receipt_number,po_number,received_date,receiver_name,status,notes,po_line_number,item_description,quantity_received,quantity_accepted,quantity_rejected
+```
+
+```bash
+curl -X POST http://localhost:8000/api/delivery-receipts/import \
+  -F "file=@frontend/public/samples/delivery-receipts-template.csv"
 ```
 
 Sample templates live in [`frontend/public/samples/`](frontend/public/samples)

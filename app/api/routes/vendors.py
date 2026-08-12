@@ -1,5 +1,3 @@
-import csv
-import io
 import uuid
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -26,6 +24,7 @@ from app.models.schemas import (
     VendorUpdate,
 )
 from app.tools.db_queries import scope_to_owner
+from app.tools.tabular import TabularError, read_tabular
 
 router = APIRouter()
 
@@ -208,47 +207,34 @@ async def delete_vendor(
 
 @router.post("/vendors/import", response_model=ImportResponse)
 async def import_vendors_csv(
-    file: UploadFile = File(..., description="CSV with one row per vendor"),
+    file: UploadFile = File(..., description="CSV or XLSX with one row per vendor"),
     db: AsyncSession = Depends(get_db),
     owner: OwnerContext = Depends(get_current_owner),
 ):
-    """Bulk-load vendors from a CSV file.
+    """Bulk-load vendors from a CSV or Excel file.
 
     One row per vendor with columns: `code,name,tax_id,address,contact_email`
     (only `code` and `name` are required). Always returns 200 so the
-    UI can render partial-success details. Only unparseable CSVs return
+    UI can render partial-success details. Only unparseable files return
     400.
     """
     raw = await file.read()
-    if not raw:
-        raise HTTPException(status_code=400, detail="CSV file is empty")
     try:
-        text = raw.decode("utf-8-sig")
-    except UnicodeDecodeError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=f"CSV must be UTF-8 encoded ({exc.reason})",
-        ) from exc
+        fieldnames, rows = read_tabular(file.filename, raw)
+    except TabularError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    reader = csv.DictReader(io.StringIO(text))
-    if not reader.fieldnames:
-        raise HTTPException(
-            status_code=400,
-            detail="CSV has no header row",
-        )
-
-    fieldnames_lower = {fn.strip().lower() for fn in reader.fieldnames}
+    fieldnames_lower = set(fieldnames)
     missing = [
         c for c in VENDOR_IMPORT_REQUIRED_COLUMNS if c not in fieldnames_lower
     ]
     if missing:
         raise HTTPException(
             status_code=400,
-            detail=f"CSV missing required columns: {', '.join(missing)}",
+            detail=f"File missing required columns: {', '.join(missing)}",
         )
 
     response = ImportResponse()
-    rows = list(enumerate(reader, start=2))  # header is row 1
 
     if not rows:
         return response

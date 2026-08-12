@@ -11,6 +11,7 @@ import { RequireAuth } from "@/components/auth/RequireAuth"
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary"
 import { PageLoadingBar } from "@/components/shared/PageLoadingBar"
 import { POSheet } from "@/components/shared/POSheet"
+import { ReceiptSheet } from "@/components/shared/ReceiptSheet"
 import { VendorSheet } from "@/components/shared/VendorSheet"
 import { ROUTES } from "@/lib/routes"
 import { useTheme } from "@/hooks/useTheme"
@@ -27,6 +28,7 @@ import { PipelinePage } from "@/pages/PipelinePage"
 import { FlowPage } from "@/pages/FlowPage"
 import { ExceptionsPage } from "@/pages/ExceptionsPage"
 import { PurchaseOrdersPage } from "@/pages/PurchaseOrdersPage"
+import { DeliveryReceiptsPage } from "@/pages/DeliveryReceiptsPage"
 import { VendorsPage } from "@/pages/VendorsPage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import { NotFoundPage } from "@/pages/NotFoundPage"
@@ -58,6 +60,7 @@ export default function App() {
       <ShortcutsOverlay />
       <VendorSheet />
       <POSheet />
+      <ReceiptSheet />
       <ErrorBoundary key={location.pathname}>
         <Routes location={location}>
           <Route path={ROUTES.landing} element={<LandingPage />} />
@@ -79,6 +82,10 @@ export default function App() {
                 path={ROUTES.purchaseOrders}
                 element={<PurchaseOrdersPage />}
               />
+              <Route
+                path={ROUTES.deliveryReceipts}
+                element={<DeliveryReceiptsPage />}
+              />
               <Route path={ROUTES.vendors} element={<VendorsPage />} />
               <Route path={ROUTES.settings} element={<SettingsPage />} />
             </Route>
@@ -95,7 +102,7 @@ export default function App() {
  * Wires all global keyboard shortcuts:
  *   ? -- open shortcuts overlay
  *   g d -- dashboard, g i -- inbox, g e -- exceptions,
- *   g p -- purchase orders, g l -- pipeline, g f -- 3D flow, g s -- settings
+ *   g p -- purchase orders, g r -- delivery receipts, g l -- pipeline, g f -- 3D flow, g s -- settings
  *   n -- new upload (jump to inbox)
  */
 function useGlobalShortcuts() {
@@ -133,6 +140,12 @@ function useGlobalShortcuts() {
         description: "Go to Purchase Orders",
         category: "Navigation",
         handler: () => navigate(ROUTES.purchaseOrders),
+      },
+      {
+        keys: "g r",
+        description: "Go to Delivery Receipts",
+        category: "Navigation",
+        handler: () => navigate(ROUTES.deliveryReceipts),
       },
       {
         keys: "g v",

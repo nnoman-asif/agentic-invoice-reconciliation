@@ -3,7 +3,7 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # ── Enums ──────────────────────────────────────────────────────────
@@ -254,6 +254,19 @@ class DeliveryLineItemCreate(BaseModel):
     quantity_accepted: float
     quantity_rejected: float = 0
 
+    @model_validator(mode="after")
+    def quantities_balance(self):
+        rec = float(self.quantity_received)
+        acc = float(self.quantity_accepted)
+        rej = float(self.quantity_rejected)
+        if rec < 0 or acc < 0 or rej < 0:
+            raise ValueError("quantities must be >= 0")
+        if round(rec - acc - rej, 3) != 0:
+            raise ValueError(
+                "quantity_received must equal quantity_accepted + quantity_rejected"
+            )
+        return self
+
 
 class DeliveryLineItemResponse(DeliveryLineItemCreate):
     id: uuid.UUID
@@ -272,6 +285,20 @@ class DeliveryReceiptBase(BaseModel):
 
 class DeliveryReceiptCreate(DeliveryReceiptBase):
     line_items: list[DeliveryLineItemCreate]
+
+
+class DeliveryReceiptUpdate(BaseModel):
+    """All fields optional. When `line_items` is provided, the route
+    upserts keyed by `po_line_item_id` (or description when that is
+    null) so FK references from `line_item_matches` survive edits.
+    """
+    receipt_number: str | None = None
+    po_id: uuid.UUID | None = None
+    received_date: date | None = None
+    receiver_name: str | None = None
+    status: DeliveryStatus | None = None
+    notes: str | None = None
+    line_items: list[DeliveryLineItemCreate] | None = None
 
 
 class DeliveryReceiptResponse(DeliveryReceiptBase):

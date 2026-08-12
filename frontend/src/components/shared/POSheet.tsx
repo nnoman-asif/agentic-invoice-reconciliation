@@ -46,6 +46,7 @@ import {
 } from "@/api/purchase-orders"
 import { useDeliveryReceipts } from "@/api/delivery-receipts"
 import { usePOSheet } from "@/store/po"
+import { useReceiptSheet } from "@/store/receipt"
 import {
   formatCurrency,
   formatDate,
@@ -77,6 +78,7 @@ function receiptStatusVariant(
 export function POSheet() {
   const poId = usePOSheet((s) => s.poId)
   const close = usePOSheet((s) => s.close)
+  const openReceipt = useReceiptSheet((s) => s.open)
   const open = !!poId
 
   const { data: po } = usePurchaseOrder(poId)
@@ -323,32 +325,35 @@ export function POSheet() {
             ) : (
               <ul className="space-y-2">
                 {receipts.map((r) => (
-                  <li
-                    key={r.id}
-                    className="rounded-lg border border-border/60 p-3"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="font-mono font-medium text-sm">
-                        {r.receipt_number}
+                  <li key={r.id}>
+                    <button
+                      type="button"
+                      onClick={() => openReceipt(r.id)}
+                      className="w-full text-left rounded-lg border border-border/60 p-3 hover:border-primary/40 hover:bg-accent/30 transition-colors"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="font-mono font-medium text-sm">
+                          {r.receipt_number}
+                        </div>
+                        <Badge
+                          variant={receiptStatusVariant(r.status)}
+                          className="capitalize"
+                        >
+                          {r.status}
+                        </Badge>
                       </div>
-                      <Badge
-                        variant={receiptStatusVariant(r.status)}
-                        className="capitalize"
-                      >
-                        {r.status}
-                      </Badge>
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      Received {formatRelative(r.received_date)}
-                      {r.receiver_name ? ` by ${r.receiver_name}` : ""} ·{" "}
-                      {r.line_items.length}{" "}
-                      {r.line_items.length === 1 ? "line" : "lines"}
-                    </div>
-                    {r.notes && (
-                      <div className="text-xs text-muted-foreground italic mt-1">
-                        {r.notes}
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Received {formatRelative(r.received_date)}
+                        {r.receiver_name ? ` by ${r.receiver_name}` : ""} ·{" "}
+                        {r.line_items.length}{" "}
+                        {r.line_items.length === 1 ? "line" : "lines"}
                       </div>
-                    )}
+                      {r.notes && (
+                        <div className="text-xs text-muted-foreground italic mt-1">
+                          {r.notes}
+                        </div>
+                      )}
+                    </button>
                   </li>
                 ))}
               </ul>
