@@ -16,6 +16,7 @@ from app.api.routes import (
     health,
     invoices,
     purchase_orders,
+    quota,
     vendors,
 )
 from app.api.webhooks import invoice_webhook
@@ -62,6 +63,7 @@ app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 app.include_router(health.router, tags=["Health"])
 app.include_router(auth.router, prefix="/api", tags=["Auth"])
 app.include_router(demo.router, prefix="/api", tags=["Demo"])
+app.include_router(quota.router, prefix="/api", tags=["Quota"])
 app.include_router(invoices.router, prefix="/api", tags=["Invoices"])
 app.include_router(purchase_orders.router, prefix="/api", tags=["Purchase Orders"])
 app.include_router(delivery_receipts.router, prefix="/api", tags=["Delivery Receipts"])

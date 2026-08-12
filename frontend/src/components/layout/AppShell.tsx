@@ -4,6 +4,7 @@ import { motion } from "framer-motion"
 import { Sidebar } from "./Sidebar"
 import { TopBar } from "./TopBar"
 import { MobileSidebar } from "./MobileSidebar"
+import { SystemLimitedBanner } from "./SystemLimitedBanner"
 import { useMediaQuery } from "@/hooks/useMediaQuery"
 
 export function AppShell() {
@@ -15,6 +16,7 @@ export function AppShell() {
       {!isDesktop && <MobileSidebar />}
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar />
+        <SystemLimitedBanner />
         <motion.main
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}

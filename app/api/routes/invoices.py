@@ -27,6 +27,7 @@ from app.tools.limits import (
     release_inflight,
 )
 from app.tools.pdf_validation import PDF_MAGIC, validate_pdf
+from app.tools.quota import assert_accepting_work
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +77,7 @@ async def upload_invoice(
     owner: OwnerContext = Depends(get_current_owner),
 ):
     redis = request.app.state.redis
+    await assert_accepting_work(redis)
     await check_upload_rate(redis, owner.user_id)
 
     # ── Validation ─────────────────────────────────────────────────

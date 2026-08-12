@@ -16,10 +16,13 @@ from app.models.database import (
     InvoiceLineItem,
     LineItemMatch,
     Reconciliation,
+    User,
 )
 from app.observability.tracing import create_trace, end_trace, trace_agent_step, flush as flush_traces
+from app.config import settings
 from app.tools.db_queries import check_duplicate_invoice
 from app.tools.limits import release_inflight_by_ids
+from app.tools.quota import quota_context
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +105,13 @@ async def process_invoice(invoice_id: uuid.UUID, db: AsyncSession) -> str:
     invoice.updated_at = datetime.now(timezone.utc)
     await db.flush()
 
+    user_row = await db.get(User, invoice.owner_id)
+    daily_limit = (
+        user_row.daily_invoice_limit
+        if user_row is not None
+        else settings.daily_invoice_limit_default
+    )
+
     initial_state = {
         "invoice_id": str(invoice_id),
         "owner_id": str(invoice.owner_id),
@@ -119,112 +129,117 @@ async def process_invoice(invoice_id: uuid.UUID, db: AsyncSession) -> str:
     duplicate_short_circuit = False
     node_timings: dict[str, float] = {}
 
-    try:
-        node_start = time.time()
-        async for chunk in reconciliation_graph.astream(
-            initial_state,
-            stream_mode="updates",
-        ):
-            for node_name, delta in chunk.items():
-                elapsed_ms = (time.time() - node_start) * 1000
-                node_timings[node_name] = elapsed_ms
-                node_start = time.time()
+    with quota_context(
+        owner_id=invoice.owner_id,
+        invoice_id=invoice_id,
+        daily_limit=daily_limit,
+    ):
+        try:
+            node_start = time.time()
+            async for chunk in reconciliation_graph.astream(
+                initial_state,
+                stream_mode="updates",
+            ):
+                for node_name, delta in chunk.items():
+                    elapsed_ms = (time.time() - node_start) * 1000
+                    node_timings[node_name] = elapsed_ms
+                    node_start = time.time()
 
-                if delta:
-                    final_state.update(delta)
+                    if delta:
+                        final_state.update(delta)
 
-                _record_node_trace(trace, node_name, final_state, elapsed_ms)
+                    _record_node_trace(trace, node_name, final_state, elapsed_ms)
 
-                # Drive the live pipeline visualizer by advancing
-                # processing_status as each stage finishes.
-                next_status = _NODE_TO_STATUS_AFTER.get(node_name)
-                if next_status and invoice.processing_status != next_status:
-                    invoice.processing_status = next_status
-                    invoice.updated_at = datetime.now(timezone.utc)
-                    await db.flush()
+                    # Drive the live pipeline visualizer by advancing
+                    # processing_status as each stage finishes.
+                    next_status = _NODE_TO_STATUS_AFTER.get(node_name)
+                    if next_status and invoice.processing_status != next_status:
+                        invoice.processing_status = next_status
+                        invoice.updated_at = datetime.now(timezone.utc)
+                        await db.flush()
 
-                # After parsing succeeds, run the duplicate-invoice
-                # check BEFORE we write invoice_number to the DB. This
-                # avoids a unique-constraint violation surfacing as a
-                # raw SQL error to the user.
-                if node_name == "parse_invoice":
-                    if final_state.get("error"):
-                        await _handle_failure(invoice, final_state["error"], db)
-                        flush_traces()
-                        _release_inflight_slot(invoice.owner_id, invoice_id)
-                        return OUTCOME_FAILED
-
-                    parsed_number = final_state.get("invoice_number")
-                    if parsed_number:
-                        is_duplicate = await check_duplicate_invoice(
-                            db, invoice.owner_id, parsed_number, invoice_id
-                        )
-                        if is_duplicate:
-                            await _handle_failure(
-                                invoice,
-                                f"Duplicate invoice: '{parsed_number}' already exists in the system",
-                                db,
-                            )
+                    # After parsing succeeds, run the duplicate-invoice
+                    # check BEFORE we write invoice_number to the DB. This
+                    # avoids a unique-constraint violation surfacing as a
+                    # raw SQL error to the user.
+                    if node_name == "parse_invoice":
+                        if final_state.get("error"):
+                            await _handle_failure(invoice, final_state["error"], db)
                             flush_traces()
-                            duplicate_short_circuit = True
-                            break
+                            _release_inflight_slot(invoice.owner_id, invoice_id)
+                            return OUTCOME_FAILED
 
-                # After matcher finishes, persist the resolved vendor_id
-                # so the UI can show the link even if a later step fails.
-                if node_name == "match_records" and final_state.get("vendor_id"):
-                    invoice.vendor_id = uuid.UUID(final_state["vendor_id"])
-                    await db.flush()
+                        parsed_number = final_state.get("invoice_number")
+                        if parsed_number:
+                            is_duplicate = await check_duplicate_invoice(
+                                db, invoice.owner_id, parsed_number, invoice_id
+                            )
+                            if is_duplicate:
+                                await _handle_failure(
+                                    invoice,
+                                    f"Duplicate invoice: '{parsed_number}' already exists in the system",
+                                    db,
+                                )
+                                flush_traces()
+                                duplicate_short_circuit = True
+                                break
+
+                    # After matcher finishes, persist the resolved vendor_id
+                    # so the UI can show the link even if a later step fails.
+                    if node_name == "match_records" and final_state.get("vendor_id"):
+                        invoice.vendor_id = uuid.UUID(final_state["vendor_id"])
+                        await db.flush()
+
+                if duplicate_short_circuit:
+                    break
 
             if duplicate_short_circuit:
-                break
+                _release_inflight_slot(invoice.owner_id, invoice_id)
+                return OUTCOME_FAILED
 
-        if duplicate_short_circuit:
-            _release_inflight_slot(invoice.owner_id, invoice_id)
-            return OUTCOME_FAILED
+            # Pull parser-derived fields onto the row.
+            invoice.invoice_number = final_state.get("invoice_number")
+            invoice.po_reference = final_state.get("po_reference")
+            invoice.invoice_date = _parse_date(final_state.get("invoice_date"))
+            invoice.due_date = _parse_date(final_state.get("due_date"))
+            invoice.total_amount = final_state.get("total_amount")
+            invoice.tax_amount = final_state.get("tax_amount")
+            invoice.parsed_data = final_state.get("parsed_data")
+            await db.flush()
 
-        # Pull parser-derived fields onto the row.
-        invoice.invoice_number = final_state.get("invoice_number")
-        invoice.po_reference = final_state.get("po_reference")
-        invoice.invoice_date = _parse_date(final_state.get("invoice_date"))
-        invoice.due_date = _parse_date(final_state.get("due_date"))
-        invoice.total_amount = final_state.get("total_amount")
-        invoice.tax_amount = final_state.get("tax_amount")
-        invoice.parsed_data = final_state.get("parsed_data")
-        await db.flush()
+            # Persist reconciliation, line matches, discrepancies, and the
+            # final invoice status.
+            processing_time_ms = int((time.time() - start_time) * 1000)
+            try:
+                final_state["trace_id"] = trace.id if trace else None
+            except Exception:
+                final_state["trace_id"] = None
+            await _persist_results(invoice, final_state, processing_time_ms, db)
 
-        # Persist reconciliation, line matches, discrepancies, and the
-        # final invoice status.
-        processing_time_ms = int((time.time() - start_time) * 1000)
-        try:
-            final_state["trace_id"] = trace.id if trace else None
-        except Exception:
-            final_state["trace_id"] = None
-        await _persist_results(invoice, final_state, processing_time_ms, db)
-
-        end_trace(trace)
-        flush_traces()
-        _release_inflight_slot(invoice.owner_id, invoice_id)
-        return OUTCOME_SUCCEEDED
-
-    except Exception as e:
-        logger.exception(f"[InvoiceService] Pipeline failed for invoice {invoice_id}")
-        if trace:
-            trace_agent_step(trace, "pipeline_error", {}, {"error": str(e)}, 0)
             end_trace(trace)
             flush_traces()
-        owner_for_release = None
-        try:
-            await db.rollback()
-            stmt = select(Invoice).where(Invoice.id == invoice_id)
-            result = await db.execute(stmt)
-            invoice = result.scalar_one()
-            owner_for_release = invoice.owner_id
-            await _handle_failure(invoice, str(e), db)
-        except Exception as inner_e:
-            logger.error(f"[InvoiceService] Could not record failure for {invoice_id}: {inner_e}")
-        if owner_for_release is not None:
-            _release_inflight_slot(owner_for_release, invoice_id)
-        return OUTCOME_FAILED
+            _release_inflight_slot(invoice.owner_id, invoice_id)
+            return OUTCOME_SUCCEEDED
+
+        except Exception as e:
+            logger.exception(f"[InvoiceService] Pipeline failed for invoice {invoice_id}")
+            if trace:
+                trace_agent_step(trace, "pipeline_error", {}, {"error": str(e)}, 0)
+                end_trace(trace)
+                flush_traces()
+            owner_for_release = None
+            try:
+                await db.rollback()
+                stmt = select(Invoice).where(Invoice.id == invoice_id)
+                result = await db.execute(stmt)
+                invoice = result.scalar_one()
+                owner_for_release = invoice.owner_id
+                await _handle_failure(invoice, str(e), db)
+            except Exception as inner_e:
+                logger.error(f"[InvoiceService] Could not record failure for {invoice_id}: {inner_e}")
+            if owner_for_release is not None:
+                _release_inflight_slot(owner_for_release, invoice_id)
+            return OUTCOME_FAILED
 
 
 def _record_node_trace(trace, node_name: str, state: dict, elapsed_ms: float) -> None:

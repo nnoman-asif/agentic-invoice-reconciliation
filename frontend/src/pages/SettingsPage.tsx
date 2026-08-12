@@ -25,8 +25,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useHealth } from "@/api/health"
+import { useQuota } from "@/api/quota"
 import { useTheme } from "@/hooks/useTheme"
 import { AUTH_ENABLED } from "@/lib/firebase"
 import { ROUTES } from "@/lib/routes"
@@ -47,6 +49,7 @@ const THEMES: {
 export function SettingsPage() {
   const { theme, setTheme } = useTheme()
   const { data: health } = useHealth()
+  const { data: quota, isLoading: quotaLoading } = useQuota()
   const navigate = useNavigate()
 
   const me = useAuthStore((s) => s.me)
@@ -76,6 +79,11 @@ export function SettingsPage() {
     }
   }
 
+  const quotaPct =
+    quota && quota.limit > 0
+      ? Math.min(100, Math.round((quota.used / quota.limit) * 100))
+      : 0
+
   return (
     <div className="space-y-8 max-w-3xl">
       <PageHeader
@@ -87,6 +95,7 @@ export function SettingsPage() {
         <TabsList>
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
           <TabsTrigger value="profile">Profile</TabsTrigger>
+          <TabsTrigger value="quota">Quota</TabsTrigger>
           <TabsTrigger value="system">System</TabsTrigger>
           <TabsTrigger value="about">About</TabsTrigger>
         </TabsList>
@@ -256,6 +265,86 @@ export function SettingsPage() {
                     </AlertDialog>
                   </div>
                 </>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="quota" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Daily invoice quota</CardTitle>
+              <CardDescription>
+                Usage is counted when an invoice reaches the LLM — PDFs
+                rejected by the upload gate do not consume quota.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              {quotaLoading && !quota ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" />
+                  Loading quota…
+                </div>
+              ) : quota ? (
+                <>
+                  <div className="flex items-end justify-between gap-4">
+                    <div>
+                      <div className="text-3xl font-semibold tabular-nums tracking-tight">
+                        {quota.used}
+                        <span className="text-lg text-muted-foreground font-normal">
+                          {" "}
+                          / {quota.limit}
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {quota.remaining} remaining today
+                      </p>
+                    </div>
+                    <Badge
+                      variant={
+                        quota.system_status === "healthy"
+                          ? "success"
+                          : "warning"
+                      }
+                    >
+                      System {quota.system_status}
+                    </Badge>
+                  </div>
+                  <Progress value={quotaPct} />
+                  <dl className="grid gap-3 sm:grid-cols-2 text-sm">
+                    <div>
+                      <dt className="text-muted-foreground text-xs uppercase tracking-wide">
+                        Resets
+                      </dt>
+                      <dd className="mt-1 font-medium">
+                        {format(new Date(quota.reset_at), "MMM d, yyyy HH:mm")}{" "}
+                        UTC
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground text-xs uppercase tracking-wide">
+                        Operator pause
+                      </dt>
+                      <dd className="mt-1 font-medium">
+                        {quota.llm_paused ? "Paused" : "Off"}
+                      </dd>
+                    </div>
+                  </dl>
+                  {quota.remaining === 0 && (
+                    <p className="text-sm text-muted-foreground border border-border/60 rounded-lg p-3 bg-muted/20">
+                      You have used today&apos;s invoice allowance. Uploads that
+                      need the LLM will wait until the daily reset
+                      {quota.system_status === "limited"
+                        ? ", or until system capacity recovers"
+                        : ""}
+                      .
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Could not load quota. Try refreshing the page.
+                </p>
               )}
             </CardContent>
           </Card>

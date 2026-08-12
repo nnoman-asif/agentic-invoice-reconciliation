@@ -83,6 +83,10 @@ class Settings(BaseSettings):
     provider_rpm_limit: int = 20
     provider_retry_max: int = 4
 
+    # Daily quota (Commit 13) — charged at provider call, not upload
+    daily_invoice_limit_default: int = 15
+    global_chat_daily_cap: int = 1000
+
     @property
     def resolved_chat_model(self) -> str:
         if self.chat_model:

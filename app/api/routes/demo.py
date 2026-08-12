@@ -25,6 +25,7 @@ from app.tools.limits import (
     enqueue_invoice,
     release_inflight,
 )
+from app.tools.quota import assert_accepting_work
 
 logger = logging.getLogger(__name__)
 
@@ -165,6 +166,7 @@ async def run_demo_scenario(
         request, db, mint_if_missing=True
     )
 
+    await assert_accepting_work(redis)
     await check_upload_rate(redis, owner_id)
 
     remaining = await remaining_runs(redis, token_key=token_key, ip=ip)

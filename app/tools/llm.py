@@ -1,8 +1,7 @@
 """Single choke point for every chat-model call.
 
-Rate limiting (Commit 12) wraps invoke via the global provider RPM
-limiter. Quota counting (Commit 13) will also land here so every
-provider invoke is accounted for in one place.
+Rate limiting (Commit 12) and quota counting (Commit 13) wrap every
+provider invoke here so gate-rejected PDFs never incur a charge.
 """
 
 from __future__ import annotations
@@ -15,12 +14,13 @@ from langchain_ollama import ChatOllama
 
 from app.config import settings
 from app.tools.limits import invoke_with_provider_retry, wait_for_provider_slot
+from app.tools.quota import QuotaExceeded, record_provider_call
 
 logger = logging.getLogger(__name__)
 
 
 class _RateLimitedChatModel:
-    """Proxy that gates ``invoke`` / ``ainvoke`` behind the provider limiter.
+    """Proxy that gates ``invoke`` / ``ainvoke`` behind quota + RPM limits.
 
     ChatOllama / ChatGoogleGenerativeAI are Pydantic models and reject
     attribute assignment for ``invoke``, so we wrap instead of patch.
@@ -30,9 +30,14 @@ class _RateLimitedChatModel:
         object.__setattr__(self, "_inner", inner)
 
     def invoke(self, *args: Any, **kwargs: Any) -> Any:
-        return invoke_with_provider_retry(self._inner.invoke, *args, **kwargs)
+        def _call(*a: Any, **kw: Any) -> Any:
+            record_provider_call()
+            return self._inner.invoke(*a, **kw)
+
+        return invoke_with_provider_retry(_call, *args, **kwargs)
 
     async def ainvoke(self, *args: Any, **kwargs: Any) -> Any:
+        record_provider_call()
         wait_for_provider_slot()
         return await self._inner.ainvoke(*args, **kwargs)
 
@@ -49,8 +54,8 @@ def get_chat_model(*, json_mode: bool = True) -> BaseChatModel:
     langchain-google-genai). Callers must ``json.loads`` the response
     content; never fall back to regex fence-stripping.
 
-    The returned model's ``invoke`` / ``ainvoke`` are wrapped with the
-    global provider RPM limiter (backoff, not fail) and 429 retries.
+    Invokes are wrapped with kill-switch / daily quota checks, the
+    global provider RPM limiter (backoff, not fail), and 429 retries.
     """
     provider = (settings.llm_provider or "ollama").strip().lower()
     model_name = settings.resolved_chat_model
@@ -86,3 +91,7 @@ def get_chat_model(*, json_mode: bool = True) -> BaseChatModel:
         format="json" if json_mode else None,
     )
     return _RateLimitedChatModel(model)  # type: ignore[return-value]
+
+
+# Re-export for callers that want to catch quota failures explicitly.
+__all__ = ["get_chat_model", "QuotaExceeded"]
