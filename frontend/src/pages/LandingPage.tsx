@@ -1,16 +1,17 @@
 import { Link, useNavigate } from "react-router-dom"
 import { motion } from "framer-motion"
-import { ArrowRight, Loader2, Play, Sparkles } from "lucide-react"
+import { ArrowRight, Play, Sparkles } from "lucide-react"
+import { useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { MagneticButton } from "@/components/shared/MagneticButton"
+import { ScenarioPicker } from "@/components/demo/ScenarioPicker"
 import { HeroAnimation } from "@/components/landing/HeroAnimation"
 import {
   FeatureMiniDiagram,
   type FeatureVariant,
 } from "@/components/landing/FeatureMiniDiagram"
-import { useDemoMode } from "@/hooks/useDemoMode"
 import { GITHUB_URL } from "@/lib/config"
 import { ROUTES } from "@/lib/routes"
 
@@ -55,17 +56,15 @@ const FEATURES: Feature[] = [
 
 export function LandingPage() {
   const navigate = useNavigate()
-  const { runDemo, isRunning } = useDemoMode()
-
-  const handleDemo = async () => {
-    const success = await runDemo()
-    // Only whisk the user away on success; on failure they stay on
-    // the landing page where the error toast is visible.
-    if (success) navigate(ROUTES.inbox)
-  }
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">
+      <ScenarioPicker
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        onStarted={() => navigate(ROUTES.inbox)}
+      />
       {/* Background mesh */}
       <div className="fixed inset-0 gradient-mesh pointer-events-none" />
 
@@ -131,15 +130,10 @@ export function LandingPage() {
               <Button
                 size="lg"
                 variant="outline"
-                onClick={handleDemo}
-                disabled={isRunning}
+                onClick={() => setPickerOpen(true)}
               >
-                {isRunning ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Play className="size-4" />
-                )}
-                {isRunning ? "Starting demo…" : "Try a live demo"}
+                <Play className="size-4" />
+                Try a live demo
               </Button>
             </MagneticButton>
             <MagneticButton>

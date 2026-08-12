@@ -1,86 +1,67 @@
-import { useState } from "react"
+import { useCallback, useState } from "react"
 import { toast } from "sonner"
 
-import { useUploadInvoice } from "@/api/invoices"
-
-const SAMPLE_FILES = [
-  { name: "invoice_clean_match.pdf", url: "/samples/invoice_clean_match.pdf" },
-  { name: "invoice_price_deviation.pdf", url: "/samples/invoice_price_deviation.pdf" },
-  { name: "invoice_qty_mismatch.pdf", url: "/samples/invoice_qty_mismatch.pdf" },
-] as const
+import {
+  fetchDemoScenarios,
+  runDemoScenario,
+  type DemoScenariosResponse,
+} from "@/api/demo"
+import { useAuthStore } from "@/store/auth"
 
 interface UseDemoModeReturn {
-  /** Returns true if at least one sample uploaded successfully. */
-  runDemo: () => Promise<boolean>
+  loadScenarios: () => Promise<DemoScenariosResponse | null>
+  runScenario: (scenarioId: string) => Promise<boolean>
   isRunning: boolean
 }
 
 /**
- * Fetches the bundled sample PDFs from `/public/samples/` and uploads them
- * to the backend, kicking off the agent pipeline. Used by the "Try Demo"
- * button on the landing page.
+ * Server-side demo flow: list scenarios and enqueue a sample invoice
+ * via /api/demo/* (no client-side PDF upload).
  */
 export function useDemoMode(): UseDemoModeReturn {
-  const upload = useUploadInvoice()
+  const setGuestToken = useAuthStore((s) => s.setGuestToken)
   const [isRunning, setIsRunning] = useState(false)
 
-  const runDemo = async (): Promise<boolean> => {
-    if (isRunning) return false
-    setIsRunning(true)
-
-    const toastId = toast.loading("Running demo...", {
-      description: "Uploading sample invoices for processing.",
-    })
-
+  const loadScenarios = useCallback(async () => {
     try {
-      // Upload each sample independently. Previously this loop did
-      // sequential `await` and aborted on the first failure -- so a
-      // 4xx on the second sample meant samples 1 and 3 never made it.
-      // `Promise.allSettled` lets every upload attempt complete and we
-      // report partial success in the toast.
-      const results = await Promise.allSettled(
-        SAMPLE_FILES.map(async (sample) => {
-          const res = await fetch(sample.url)
-          if (!res.ok) {
-            throw new Error(`Could not load ${sample.name}`)
-          }
-          const blob = await res.blob()
-          const file = new File([blob], sample.name, {
-            type: "application/pdf",
-          })
-          await upload.mutateAsync(file)
+      return await fetchDemoScenarios()
+    } catch (e: unknown) {
+      const message =
+        e instanceof Error ? e.message : "Could not load demo scenarios"
+      toast.error("Demo unavailable", { description: message })
+      return null
+    }
+  }, [])
+
+  const runScenario = useCallback(
+    async (scenarioId: string): Promise<boolean> => {
+      if (isRunning) return false
+      setIsRunning(true)
+
+      const toastId = toast.loading("Starting demo…", {
+        description: "Enqueueing a sample invoice on the server.",
+      })
+
+      try {
+        const result = await runDemoScenario(scenarioId)
+        if (result.guest_token) {
+          setGuestToken(result.guest_token)
+        }
+        toast.success("Demo started", {
+          id: toastId,
+          description: `${result.remaining_today} demo run(s) remaining today. Watch it in the inbox.`,
         })
-      )
-
-      const succeeded = results.filter((r) => r.status === "fulfilled").length
-      const failed = results.length - succeeded
-
-      if (succeeded === 0) {
-        const firstError = results.find(
-          (r): r is PromiseRejectedResult => r.status === "rejected"
-        )
-        const message =
-          firstError?.reason instanceof Error
-            ? firstError.reason.message
-            : "All sample uploads failed"
+        return true
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : "Demo failed"
         toast.error("Demo failed", { id: toastId, description: message })
         return false
+      } finally {
+        setIsRunning(false)
       }
+    },
+    [isRunning, setGuestToken]
+  )
 
-      const description =
-        failed > 0
-          ? `${succeeded} of ${results.length} samples uploaded (${failed} failed). Watch them process in the inbox.`
-          : `${succeeded} invoices uploaded. Watch them process in the inbox or pipeline view.`
-      toast.success("Demo started", { id: toastId, description })
-      return true
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : "Demo failed"
-      toast.error("Demo failed", { id: toastId, description: message })
-      return false
-    } finally {
-      setIsRunning(false)
-    }
-  }
-
-  return { runDemo, isRunning }
+  return { loadScenarios, runScenario, isRunning }
 }
