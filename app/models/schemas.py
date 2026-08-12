@@ -3,7 +3,9 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
+
+from app.config import SYSTEM_USER_ID
 
 
 # ── Enums ──────────────────────────────────────────────────────────
@@ -108,6 +110,12 @@ class VendorResponse(VendorBase):
     id: uuid.UUID
     created_at: datetime
     updated_at: datetime
+    owner_id: uuid.UUID = Field(exclude=True)
+
+    @computed_field
+    @property
+    def is_system(self) -> bool:
+        return self.owner_id == SYSTEM_USER_ID
 
     model_config = {"from_attributes": True}
 
@@ -180,6 +188,12 @@ class PurchaseOrderResponse(PurchaseOrderBase):
     created_at: datetime
     updated_at: datetime
     line_items: list[POLineItemResponse] = []
+    owner_id: uuid.UUID = Field(exclude=True)
+
+    @computed_field
+    @property
+    def is_system(self) -> bool:
+        return self.owner_id == SYSTEM_USER_ID
 
     model_config = {"from_attributes": True}
 
@@ -193,6 +207,12 @@ class PurchaseOrderListResponse(BaseModel):
     total_amount: float
     currency: str
     created_at: datetime
+    owner_id: uuid.UUID = Field(exclude=True)
+
+    @computed_field
+    @property
+    def is_system(self) -> bool:
+        return self.owner_id == SYSTEM_USER_ID
 
     model_config = {"from_attributes": True}
 
@@ -305,6 +325,12 @@ class DeliveryReceiptResponse(DeliveryReceiptBase):
     id: uuid.UUID
     created_at: datetime
     line_items: list[DeliveryLineItemResponse] = []
+    owner_id: uuid.UUID = Field(exclude=True)
+
+    @computed_field
+    @property
+    def is_system(self) -> bool:
+        return self.owner_id == SYSTEM_USER_ID
 
     model_config = {"from_attributes": True}
 

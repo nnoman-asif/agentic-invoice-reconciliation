@@ -131,11 +131,15 @@ async def release_inflight(
     await redis.srem(_inflight_key(owner_id), str(invoice_id))
 
 
-async def release_inflight_by_ids(
+def release_inflight_by_ids(
     owner_id: uuid.UUID,
     invoice_id: uuid.UUID,
 ) -> None:
-    """Release using a short-lived Redis client (worker / service path)."""
+    """Release using a short-lived Redis client (worker / service path).
+
+    Synchronous on purpose: the worker cleanup path is a plain ``def``
+    and must actually run ``SREM`` rather than discarding a coroutine.
+    """
     client = sync_redis.from_url(settings.redis_url, decode_responses=True)
     try:
         client.srem(_inflight_key(owner_id), str(invoice_id))

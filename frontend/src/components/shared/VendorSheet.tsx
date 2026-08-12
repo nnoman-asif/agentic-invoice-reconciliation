@@ -135,6 +135,7 @@ export function VendorSheet() {
                     <code className="text-xs font-mono">{vendor.code}</code>
                   </SheetDescription>
                 </div>
+                {vendor && !vendor.is_system && (
                 <Button
                   variant="ghost"
                   size="icon"
@@ -144,6 +145,7 @@ export function VendorSheet() {
                 >
                   <Pencil className="size-4" />
                 </Button>
+                )}
               </div>
 
               <div className="space-y-1.5 text-sm pt-2">
@@ -287,7 +289,7 @@ export function VendorSheet() {
           </TabsContent>
         </Tabs>
 
-        {vendor && (
+        {vendor && !vendor.is_system && (
           <SheetFooter className="border-t border-border/60 px-6 py-3 mt-0">
             <Button
               variant="outline"

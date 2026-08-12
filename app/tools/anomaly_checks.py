@@ -27,8 +27,8 @@ def check_price_deviations(
 
     for match in line_matches:
         dev = match.get("price_deviation_pct")
-        if dev is not None and dev > threshold:
-            severity = "critical" if dev > threshold * 2 else "warning"
+        if dev is not None and dev >= threshold:
+            severity = "critical" if dev >= threshold * 2 else "warning"
             anomalies.append(AnomalyResult(
                 type="price_deviation",
                 severity=severity,

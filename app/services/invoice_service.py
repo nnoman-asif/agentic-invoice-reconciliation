@@ -102,6 +102,7 @@ async def process_invoice(invoice_id: uuid.UUID, db: AsyncSession) -> str:
     trace = create_trace(str(invoice_id), user_id=str(invoice.owner_id))
 
     invoice.processing_status = "parsing"
+    invoice.error_message = None
     invoice.updated_at = datetime.now(timezone.utc)
     await db.flush()
 

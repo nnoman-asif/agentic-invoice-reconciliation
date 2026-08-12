@@ -140,6 +140,7 @@ export function ReceiptSheet() {
                     </span>
                   </SheetDescription>
                 </div>
+                {receipt && !receipt.is_system && (
                 <Button
                   variant="ghost"
                   size="icon"
@@ -149,6 +150,7 @@ export function ReceiptSheet() {
                 >
                   <Pencil className="size-4" />
                 </Button>
+                )}
               </div>
 
               <div className="grid grid-cols-3 divide-x divide-border/60 border-y border-border/60 -mx-6 px-0">
@@ -217,7 +219,7 @@ export function ReceiptSheet() {
           )}
         </div>
 
-        {receipt && (
+        {receipt && !receipt.is_system && (
           <SheetFooter className="border-t border-border/60 px-6 py-3 mt-0">
             <Button
               variant="outline"

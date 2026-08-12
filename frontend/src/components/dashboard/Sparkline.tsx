@@ -19,6 +19,7 @@ export function Sparkline({
   strokeWidth = 1.5,
   className,
 }: Props) {
+  const reactId = useId()
   // Drop NaN / Infinity so a single bad point doesn't poison min/max
   // and produce an invalid SVG path.
   const cleaned = data.filter((v) => Number.isFinite(v))
@@ -52,7 +53,6 @@ export function Sparkline({
   const fillPath = `${path} L ${points[points.length - 1][0]} ${height} L ${points[0][0]} ${height} Z`
   // Stable per-instance id (was `Math.random()` which produced a
   // different value every render and could collide across instances).
-  const reactId = useId()
   const id = `spark-${reactId.replace(/:/g, "")}`
 
   return (

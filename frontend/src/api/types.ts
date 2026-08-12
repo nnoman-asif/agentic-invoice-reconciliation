@@ -137,6 +137,7 @@ export interface PurchaseOrderListItem {
   total_amount: number
   currency: string
   created_at: string
+  is_system: boolean
 }
 
 export interface PurchaseOrder extends PurchaseOrderListItem {
@@ -275,6 +276,7 @@ export interface DeliveryReceipt {
   notes: string | null
   created_at: string
   line_items: DeliveryLineItem[]
+  is_system: boolean
 }
 
 export interface LineItemMatch {

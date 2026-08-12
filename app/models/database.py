@@ -47,11 +47,31 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now, onupdate=_utc_now)
 
-    vendors: Mapped[list["Vendor"]] = relationship(back_populates="owner")
-    purchase_orders: Mapped[list["PurchaseOrder"]] = relationship(back_populates="owner")
-    delivery_receipts: Mapped[list["DeliveryReceipt"]] = relationship(back_populates="owner")
-    invoices: Mapped[list["Invoice"]] = relationship(back_populates="owner")
-    quota_requests: Mapped[list["QuotaRequest"]] = relationship(back_populates="user")
+    vendors: Mapped[list["Vendor"]] = relationship(
+        back_populates="owner",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    purchase_orders: Mapped[list["PurchaseOrder"]] = relationship(
+        back_populates="owner",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    delivery_receipts: Mapped[list["DeliveryReceipt"]] = relationship(
+        back_populates="owner",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    invoices: Mapped[list["Invoice"]] = relationship(
+        back_populates="owner",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    quota_requests: Mapped[list["QuotaRequest"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
     __table_args__ = (
         CheckConstraint("kind IN ('user', 'guest', 'system')", name="chk_users_kind"),

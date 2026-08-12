@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -147,6 +148,7 @@ async def get_demo_scenarios(
 async def run_demo_scenario(
     body: DemoRunRequest,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     scenario = get_scenario(body.scenario)
@@ -166,6 +168,25 @@ async def run_demo_scenario(
         request, db, mint_if_missing=True
     )
 
+    pdf_bytes = Path(scenario.pdf_path).read_bytes()
+    file_hash = hashlib.sha256(pdf_bytes).hexdigest()
+    existing_q = await db.execute(
+        select(Invoice).where(
+            Invoice.owner_id == owner_id,
+            Invoice.file_hash == file_hash,
+        )
+    )
+    existing = existing_q.scalar_one_or_none()
+    if existing is not None:
+        remaining = await remaining_runs(redis, token_key=token_key, ip=ip)
+        response.status_code = 200
+        return DemoRunResponse(
+            invoice_id=existing.id,
+            scenario=scenario.id,
+            guest_token=new_token,
+            remaining_today=remaining,
+        )
+
     await assert_accepting_work(redis)
     await check_upload_rate(redis, owner_id)
 
@@ -184,7 +205,6 @@ async def run_demo_scenario(
     await acquire_inflight(redis, owner_id, invoice_id)
 
     try:
-        pdf_bytes = Path(scenario.pdf_path).read_bytes()
         file_path = get_storage().write_bytes(f"{invoice_id}.pdf", pdf_bytes)
     except Exception:
         await release_inflight(redis, owner_id, invoice_id)
@@ -197,6 +217,7 @@ async def run_demo_scenario(
         business_status="pending",
         raw_file_path=file_path,
         file_content_type="application/pdf",
+        file_hash=file_hash,
         po_reference=scenario.po_number,
     )
     db.add(invoice)

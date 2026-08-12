@@ -152,6 +152,7 @@ export function POSheet() {
                     </span>
                   </SheetDescription>
                 </div>
+                {po && !po.is_system && (
                 <Button
                   variant="ghost"
                   size="icon"
@@ -161,6 +162,7 @@ export function POSheet() {
                 >
                   <Pencil className="size-4" />
                 </Button>
+                )}
               </div>
 
               <div className="grid grid-cols-3 divide-x divide-border/60 border-y border-border/60 -mx-6 px-0">
@@ -361,7 +363,7 @@ export function POSheet() {
           </TabsContent>
         </Tabs>
 
-        {po && (
+        {po && !po.is_system && (
           <SheetFooter className="border-t border-border/60 px-6 py-3 mt-0">
             <Button
               variant="outline"
