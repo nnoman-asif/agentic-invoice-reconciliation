@@ -92,13 +92,10 @@ def resolve(state: dict) -> dict:
     confidence = result.get("confidence", 0.5)
     reasoning = result.get("reasoning", "")
 
-    # Map LLM recommendation to status
-    if recommendation == "approve" and confidence >= settings.auto_approve_confidence:
-        overall_status = "auto_approved"
-    elif recommendation == "reject":
-        overall_status = "pending_review"
-    else:
-        overall_status = "pending_review"
+    # LLM path never auto-approves: uncalibrated model confidence must
+    # not gate an irreversible payment decision. Deterministic fast paths
+    # above remain the only auto-approve routes.
+    overall_status = "pending_review"
 
     # Determine match type
     line_matches = state.get("line_item_matches", [])

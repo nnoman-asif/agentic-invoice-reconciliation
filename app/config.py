@@ -37,7 +37,6 @@ class Settings(BaseSettings):
     # Agent Config
     price_deviation_threshold: float = 5.0
     quantity_mismatch_threshold: float = 0.0
-    auto_approve_confidence: float = 0.95
 
     # File Upload
     upload_dir: str = "uploads/invoices"
