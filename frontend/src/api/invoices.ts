@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiClient } from "./client"
+import { useAuthStore } from "@/store/auth"
+import { AUTH_ENABLED } from "@/lib/firebase"
 import {
   isInvoiceProcessing,
   type Invoice,
@@ -29,6 +31,7 @@ export function useInvoices(filters?: {
   business_status?: string
   vendor_id?: string
 }) {
+  const hasAuth = useAuthStore((s) => s.idToken !== null || s.guestToken !== null)
   return useQuery({
     queryKey: invoiceKeys.list(filters),
     queryFn: async () => {
@@ -44,6 +47,7 @@ export function useInvoices(filters?: {
       )
       return data
     },
+    enabled: AUTH_ENABLED ? hasAuth : true,
     refetchInterval: (query) => {
       const data = query.state.data
       const hasProcessing = data?.some((inv) =>
@@ -55,13 +59,14 @@ export function useInvoices(filters?: {
 }
 
 export function useInvoice(id: string | undefined) {
+  const hasAuth = useAuthStore((s) => s.idToken !== null || s.guestToken !== null)
   return useQuery({
     queryKey: invoiceKeys.detail(id ?? ""),
     queryFn: async () => {
       const { data } = await apiClient.get<Invoice>(`/api/invoices/${id}`)
       return data
     },
-    enabled: !!id,
+    enabled: !!id && (AUTH_ENABLED ? hasAuth : true),
     refetchInterval: (query) => {
       const data = query.state.data
       return isInvoiceProcessing(data?.processing_status) ? 1500 : false

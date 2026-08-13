@@ -70,9 +70,10 @@ def resolve(state: dict) -> dict:
         ("human", f"Reconciliation summary:\n{summary}"),
     ]
 
+    from app.tools.llm import parse_json_response
     try:
         response = llm.invoke(messages)
-        result = json.loads(response.content)
+        result = parse_json_response(response.content)
     except Exception as e:
         logger.error(f"[ResolutionAgent] LLM error: {e}")
         result = {

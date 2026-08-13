@@ -23,7 +23,7 @@ const HOP_BY_HOP = new Set([
 
 export default {
   async fetch(request, env) {
-    const origin = String(env.ORIGIN || "http://158.101.254.173:8000").replace(
+    const origin = String(env.ORIGIN || "http://127.0.0.1:8000").replace(
       /\/$/,
       ""
     );

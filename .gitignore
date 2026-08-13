@@ -53,7 +53,9 @@ logs/
 # Firebase / Wrangler
 .firebase/
 firebase-debug.log
+.firebaserc
 .wrangler/
+cloudflare/wrangler.toml
 
 # Misc
 *.bak

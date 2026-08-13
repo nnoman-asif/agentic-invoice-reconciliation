@@ -76,11 +76,10 @@ def parse_invoice(state: dict) -> dict:
         ("human", f"Extract structured data from this invoice:\n\n{raw_text}"),
     ]
 
+    from app.tools.llm import parse_json_response
     try:
         response = llm.invoke(messages)
-        parsed = json.loads(response.content)
-    except json.JSONDecodeError as e:
-        return {**state, "error": f"LLM returned invalid JSON: {e}"}
+        parsed = parse_json_response(response.content)
     except Exception as e:
         return {**state, "error": f"LLM parsing failed: {e}"}
 

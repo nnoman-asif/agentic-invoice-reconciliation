@@ -6,4 +6,4 @@ compatibility_date = "2026-08-01"
 # The Worker fetches the Oracle VM over HTTP on port 8000.
 
 [vars]
-ORIGIN = "http://158.101.254.173:8000"
+ORIGIN = "http://<YOUR_SERVER_IP>.nip.io:8000"

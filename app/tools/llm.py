@@ -93,5 +93,29 @@ def get_chat_model(*, json_mode: bool = True) -> BaseChatModel:
     return _RateLimitedChatModel(model)  # type: ignore[return-value]
 
 
+import json
+
+def parse_json_response(response_content: Any) -> Any:
+    """Safely extract and parse JSON from an AIMessage content."""
+    if isinstance(response_content, list):
+        # Extract text from list of blocks (e.g. Gemini multi-part response)
+        content = "".join(
+            c.get("text", "") if isinstance(c, dict) else str(c)
+            for c in response_content
+        )
+    else:
+        content = str(response_content)
+
+    content = content.strip()
+    if content.startswith("```json"):
+        content = content[7:]
+    elif content.startswith("```"):
+        content = content[3:]
+    if content.endswith("```"):
+        content = content[:-3]
+    content = content.strip()
+
+    return json.loads(content)
+
 # Re-export for callers that want to catch quota failures explicitly.
-__all__ = ["get_chat_model", "QuotaExceeded"]
+__all__ = ["get_chat_model", "QuotaExceeded", "parse_json_response"]
