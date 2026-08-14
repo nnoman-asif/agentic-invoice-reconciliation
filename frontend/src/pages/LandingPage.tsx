@@ -25,7 +25,7 @@ const FEATURES: Feature[] = [
   {
     variant: "pipeline",
     title: "Multi-agent pipeline",
-    desc: "4 specialized LangGraph agents work together to parse, match, detect anomalies, and resolve.",
+    desc: "4 specialized AI agents work together to parse, match, detect anomalies, and resolve.",
   },
   {
     variant: "visualizer",
@@ -43,14 +43,14 @@ const FEATURES: Feature[] = [
     desc: "Auto-approve clean matches, route exceptions to humans with agent recommendations.",
   },
   {
-    variant: "observability",
-    title: "Full observability",
-    desc: "Every agent step traced via Langfuse with processing time and cost metrics.",
+    variant: "analytics",
+    title: "Real-time Analytics",
+    desc: "Monitor reconciliation health, match rates, and top discrepancies through a comprehensive live dashboard.",
   },
   {
-    variant: "local-llm",
-    title: "Local LLM",
-    desc: "Runs entirely on your hardware via Ollama and Qwen 2.5. Zero API costs.",
+    variant: "semantic-rag",
+    title: "Semantic Memory",
+    desc: "Maintains a semantic memory of past resolutions for intelligent recommendations and decisions.",
   },
 ]
 

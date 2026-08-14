@@ -7,8 +7,8 @@ export type FeatureVariant =
   | "visualizer"
   | "compare"
   | "human-loop"
-  | "observability"
-  | "local-llm"
+  | "analytics"
+  | "semantic-rag"
 
 interface Props {
   variant: FeatureVariant
@@ -22,8 +22,8 @@ export function FeatureMiniDiagram({ variant, className }: Props) {
       {variant === "visualizer" && <Visualizer />}
       {variant === "compare" && <Compare />}
       {variant === "human-loop" && <HumanLoop />}
-      {variant === "observability" && <Observability />}
-      {variant === "local-llm" && <LocalLLM />}
+      {variant === "analytics" && <Analytics />}
+      {variant === "semantic-rag" && <SemanticRAG />}
     </div>
   )
 }
@@ -186,77 +186,90 @@ function HumanLoop() {
   )
 }
 
-/* Observability: trace spans */
-function Observability() {
-  const spans = [
-    { y: 18, x: 16, w: 38 },
-    { y: 32, x: 18, w: 60 },
-    { y: 46, x: 40, w: 42 },
-    { y: 60, x: 78, w: 50 },
-  ]
+/* Analytics: animated line chart */
+function Analytics() {
   return (
     <svg viewBox="0 0 160 80" className="w-full h-full">
-      {spans.map((s, i) => (
-        <motion.rect
-          key={i}
-          x={s.x}
-          y={s.y}
-          height="6"
-          rx="3"
-          fill="hsl(var(--primary))"
-          opacity="0.6"
-          initial={{ width: 0 }}
-          animate={{ width: s.w }}
-          transition={{
-            duration: 1,
-            delay: i * 0.2,
-            repeat: Infinity,
-            repeatType: "reverse",
-            repeatDelay: 0.3,
-          }}
-        />
-      ))}
-      {/* Time axis */}
-      <line x1="14" y1="72" x2="146" y2="72" stroke="hsl(var(--border))" strokeWidth="1" />
-      {[14, 50, 86, 122].map((x) => (
-        <line key={x} x1={x} y1="72" x2={x} y2="76" stroke="hsl(var(--border))" strokeWidth="1" />
-      ))}
+      <defs>
+        <linearGradient id="analyticsGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.3" />
+          <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      
+      {/* Grid lines */}
+      <line x1="10" y1="25" x2="150" y2="25" stroke="hsl(var(--border))" strokeWidth="1" strokeDasharray="2 2" />
+      <line x1="10" y1="48" x2="150" y2="48" stroke="hsl(var(--border))" strokeWidth="1" strokeDasharray="2 2" />
+      <line x1="10" y1="70" x2="150" y2="70" stroke="hsl(var(--border))" strokeWidth="2" strokeLinecap="round" />
+      
+      {/* Animated line and fill */}
+      <motion.path
+        d="M 10 65 L 40 45 L 70 55 L 110 25 L 150 15 L 150 70 L 10 70 Z"
+        fill="url(#analyticsGrad)"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 1.5 }}
+      />
+      <motion.path
+        d="M 10 65 L 40 45 L 70 55 L 110 25 L 150 15"
+        fill="none"
+        stroke="hsl(var(--primary))"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        initial={{ pathLength: 0 }}
+        animate={{ pathLength: 1 }}
+        transition={{ duration: 2, ease: "easeInOut", repeat: Infinity, repeatType: "reverse", repeatDelay: 1 }}
+      />
+      
+      {/* Data point dot */}
+      <motion.circle
+        cx="150"
+        cy="15"
+        r="4"
+        fill="hsl(var(--background))"
+        stroke="hsl(var(--primary))"
+        strokeWidth="2"
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ duration: 0.4, repeat: Infinity, repeatType: "reverse", repeatDelay: 3.6 }}
+      />
     </svg>
   )
 }
 
-/* Local LLM: chip with neural net pulse */
-function LocalLLM() {
+/* Semantic RAG Memory: database stack with search vector pulse */
+function SemanticRAG() {
   return (
     <svg viewBox="0 0 160 80" className="w-full h-full">
-      {/* Chip body */}
-      <rect x="60" y="20" width="40" height="40" rx="4" fill="hsl(var(--background))" stroke="hsl(var(--primary))" strokeWidth="1.5" />
-      {/* Pins */}
-      {[0, 1, 2, 3].map((i) => (
-        <line key={`t${i}`} x1={68 + i * 8} y1="20" x2={68 + i * 8} y2="14" stroke="hsl(var(--primary))" strokeWidth="1.5" />
-      ))}
-      {[0, 1, 2, 3].map((i) => (
-        <line key={`b${i}`} x1={68 + i * 8} y1="60" x2={68 + i * 8} y2="66" stroke="hsl(var(--primary))" strokeWidth="1.5" />
-      ))}
-      {[0, 1, 2, 3].map((i) => (
-        <line key={`l${i}`} x1="60" y1={28 + i * 8} x2="54" y2={28 + i * 8} stroke="hsl(var(--primary))" strokeWidth="1.5" />
-      ))}
-      {[0, 1, 2, 3].map((i) => (
-        <line key={`r${i}`} x1="100" y1={28 + i * 8} x2="106" y2={28 + i * 8} stroke="hsl(var(--primary))" strokeWidth="1.5" />
-      ))}
-      {/* Inner pulse circle */}
+      {/* Database discs */}
+      <ellipse cx="80" cy="50" rx="25" ry="8" fill="hsl(var(--background))" stroke="hsl(var(--primary))" strokeWidth="1.5" />
+      <path d="M 55 40 L 55 50 A 25 8 0 0 0 105 50 L 105 40" fill="none" stroke="hsl(var(--primary))" strokeWidth="1.5" />
+      <ellipse cx="80" cy="40" rx="25" ry="8" fill="hsl(var(--background))" stroke="hsl(var(--primary))" strokeWidth="1.5" />
+      <path d="M 55 30 L 55 40 A 25 8 0 0 0 105 40 L 105 30" fill="none" stroke="hsl(var(--primary))" strokeWidth="1.5" />
+      <ellipse cx="80" cy="30" rx="25" ry="8" fill="hsl(var(--background))" stroke="hsl(var(--primary))" strokeWidth="1.5" />
+      
+      {/* Pulsing connection / vector search */}
       <motion.circle
         cx="80"
-        cy="40"
-        r="6"
+        cy="30"
+        r="4"
         fill="hsl(var(--primary))"
-        initial={{ opacity: 0.5 }}
-        animate={{ opacity: [0.5, 1, 0.5], scale: [1, 1.4, 1] }}
+        initial={{ opacity: 0.2 }}
+        animate={{ opacity: [0.2, 1, 0.2], r: [4, 8, 4] }}
         transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-        style={{ transformOrigin: "80px 40px" }}
       />
-      <text x="80" y="44" textAnchor="middle" className="fill-background text-[6px] font-bold pointer-events-none">
-        LLM
+      <motion.path
+        d="M 80 15 L 80 30"
+        stroke="hsl(var(--primary))"
+        strokeWidth="2"
+        strokeDasharray="4 4"
+        initial={{ strokeDashoffset: 8 }}
+        animate={{ strokeDashoffset: 0 }}
+        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+      />
+      <text x="80" y="12" textAnchor="middle" className="fill-primary text-[10px] font-bold pointer-events-none">
+        RAG
       </text>
     </svg>
   )
