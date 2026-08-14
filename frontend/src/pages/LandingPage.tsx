@@ -212,6 +212,11 @@ export function LandingPage() {
         </Card>
       </section>
 
+    <footer className="relative z-10 border-t border-border/60 mt-12 py-8 bg-background/50 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-6 flex items-center justify-center text-sm text-muted-foreground">
+          © {new Date().getFullYear()} All Rights Reserved.
+        </div>
+      </footer>
     </div>
   )
 }

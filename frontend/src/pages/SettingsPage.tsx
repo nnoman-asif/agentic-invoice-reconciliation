@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useLocation } from "react-router-dom"
 import { format } from "date-fns"
 import { Loader2, Monitor, Moon, Sun } from "lucide-react"
 import { toast } from "sonner"
@@ -55,6 +55,13 @@ export function SettingsPage() {
   const { data: quota, isLoading: quotaLoading } = useQuota()
   const requestQuota = useRequestQuotaIncrease()
   const navigate = useNavigate()
+  const location = useLocation()
+  
+  const currentTab = location.hash.replace("#", "") || "appearance"
+
+  const handleTabChange = (val: string) => {
+    navigate(`${ROUTES.settings}#${val}`, { replace: true })
+  }
 
   const me = useAuthStore((s) => s.me)
   const ready = useAuthStore((s) => s.ready)
@@ -120,7 +127,7 @@ export function SettingsPage() {
         description="Configure your reconciliation experience."
       />
 
-      <Tabs defaultValue="appearance">
+      <Tabs value={currentTab} onValueChange={handleTabChange}>
         <TabsList>
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
           <TabsTrigger value="profile">Profile</TabsTrigger>
@@ -228,15 +235,10 @@ export function SettingsPage() {
                     </div>
                     <div className="sm:col-span-2">
                       <dt className="text-muted-foreground text-xs uppercase tracking-wide">
-                        Scheduled deletion
+                        Account retention
                       </dt>
-                      <dd className="mt-1 font-medium">
-                        {me.scheduled_deletion_at
-                          ? format(
-                              new Date(me.scheduled_deletion_at),
-                              "MMM d, yyyy HH:mm"
-                            )
-                          : "—"}
+                      <dd className="mt-1 font-medium text-sm text-muted-foreground">
+                        Demo - if account is inactive for 7 days it will be removed.
                       </dd>
                     </div>
                   </dl>
@@ -346,8 +348,7 @@ export function SettingsPage() {
                         Resets
                       </dt>
                       <dd className="mt-1 font-medium">
-                        {format(new Date(quota.reset_at), "MMM d, yyyy HH:mm")}{" "}
-                        UTC
+                        {format(new Date(quota.reset_at), "MMM d, yyyy HH:mm")}
                       </dd>
                     </div>
                     <div>
@@ -434,19 +435,15 @@ export function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               {[
-                { label: "PostgreSQL", value: health?.postgres },
-                { label: "Redis", value: health?.redis },
-                { label: "Ollama", value: health?.ollama },
-                { label: "Chat provider", value: health?.chat_provider },
-                { label: "Embedding provider", value: health?.embedding_provider },
+                { label: "Relational Database", value: health?.postgres },
+                { label: "In-memory Cache", value: health?.redis },
+                { label: "LLM Inference Engine", value: health?.chat_provider ? "healthy" : "unhealthy" },
+                { label: "Vector Search Engine", value: health?.embedding_provider ? "healthy" : "unhealthy" },
                 {
-                  label: "Queue depth",
-                  value:
-                    health?.queue_depth == null
-                      ? undefined
-                      : String(health.queue_depth),
+                  label: "Message Queue",
+                  value: health?.queue_depth != null ? "healthy" : "unhealthy",
                 },
-                { label: "Quota", value: health?.quota_status },
+                { label: "Quota Service", value: health?.quota_status },
               ].map((svc) => (
                 <div
                   key={svc.label}
@@ -455,10 +452,7 @@ export function SettingsPage() {
                   <span className="font-medium">{svc.label}</span>
                   <Badge
                     variant={
-                      svc.value === "healthy" ||
-                      svc.value === "skipped" ||
-                      (svc.label === "Queue depth" && svc.value != null) ||
-                      svc.label.endsWith("provider")
+                      svc.value === "healthy"
                         ? "success"
                         : svc.value === "limited" || svc.value === "degraded"
                           ? "warning"
@@ -483,38 +477,14 @@ export function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-4 text-sm">
               <p className="text-muted-foreground leading-relaxed">
-                A production-grade, multi-agent system that automates 3-way
-                invoice matching using LangGraph, with human-in-the-loop for
-                exceptions and full observability via Langfuse.
+                A production-grade, multi-agent AI system that automates 3-way
+                invoice matching with human-in-the-loop for
+                exceptions and full observability.
               </p>
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                {[
-                  "LangGraph",
-                  "FastAPI",
-                  "PostgreSQL + pgvector",
-                  "Redis",
-                  "Ollama (Qwen 2.5 7B)",
-                  "Langfuse",
-                  "React + Vite",
-                  "Tailwind + shadcn/ui",
-                ].map((tech) => (
-                  <div
-                    key={tech}
-                    className="px-3 py-2 rounded-lg bg-muted/30 border border-border/60 text-xs font-mono"
-                  >
-                    {tech}
-                  </div>
-                ))}
+              
+              <div className="pt-4 mt-4 border-t border-border/60 flex items-center justify-between text-xs text-muted-foreground">
+                <span>© {new Date().getFullYear()} All Rights Reserved.</span>
               </div>
-              <Button variant="outline" asChild className="mt-2">
-                <a
-                  href="https://github.com/nnoman-asif/agentic-invoice-reconciliation"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  View on GitHub →
-                </a>
-              </Button>
             </CardContent>
           </Card>
         </TabsContent>
