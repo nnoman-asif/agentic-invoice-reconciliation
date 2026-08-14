@@ -46,6 +46,9 @@ export function LoginPage() {
       return "CANCELLED"
     }
     if (code === "auth/configuration-not-found") return "This sign-in method is not enabled in the Firebase Console. Please enable it in Authentication > Sign-in method."
+    if (code === "auth/indexed-db-unavailable" || err?.message?.includes("Database is closing")) {
+      return "Browser storage connection interrupted. Please refresh the page and try again."
+    }
     if (err instanceof Error) {
       return err.message.replace(/Firebase:\s*/, "").replace(/\(auth\/.*\)\.?/, "").trim() || "Authentication failed"
     }
