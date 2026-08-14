@@ -219,21 +219,6 @@ export function LandingPage() {
         </Card>
       </section>
 
-      <footer className="relative z-10 max-w-7xl mx-auto px-6 py-8 border-t border-border/60 flex items-center justify-center gap-2 text-xs text-muted-foreground">
-        <span>Open source</span>
-        <span aria-hidden>·</span>
-        <span>MIT</span>
-        <span aria-hidden>·</span>
-        <a
-          href={GITHUB_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
-        >
-          GitHub
-          <ArrowRight className="size-3" />
-        </a>
-      </footer>
     </div>
   )
 }

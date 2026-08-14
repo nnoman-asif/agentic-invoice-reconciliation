@@ -431,4 +431,8 @@ docker compose -f docker-compose.prod.yml --env-file .env up -d --build
 
 ## License
 
-All Rights Reserved
+**Copyright (c) 2026 Noman Asif. All rights reserved.**
+
+This repository and its contents are provided for viewing purposes only. No license is granted to use, copy, modify, distribute, or run this software for commercial, personal, or educational purposes without explicit written permission from the author.
+
+If you are interested in utilizing this software or licensing the underlying technology, please reach out to me directly on GitHub or via email at nomanasif434@gmail.com.

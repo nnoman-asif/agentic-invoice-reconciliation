@@ -1,12 +1,13 @@
 import { useState, type FormEvent } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
 import { motion } from "framer-motion"
-import { Github, Loader2, Sparkles } from "lucide-react"
+import { Github, Loader2, Sparkles, X } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { MagneticButton } from "@/components/shared/MagneticButton"
 import { AUTH_ENABLED } from "@/lib/firebase"
 import { ROUTES } from "@/lib/routes"
 import { useAuthStore } from "@/store/auth"
@@ -27,10 +28,28 @@ export function LoginPage() {
   const [mode, setMode] = useState<"signin" | "register">("signin")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
   const [busy, setBusy] = useState(false)
 
   const afterAuth = () => {
     navigate(from, { replace: true })
+  }
+
+  const mapAuthError = (err: any): string => {
+    const code = err?.code || ""
+    if (code === "auth/invalid-credential" || code === "auth/user-not-found" || code === "auth/wrong-password") {
+      return "Invalid email or password"
+    }
+    if (code === "auth/email-already-in-use") return "An account with this email already exists"
+    if (code === "auth/weak-password") return "Password should be at least 6 characters"
+    if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
+      return "CANCELLED"
+    }
+    if (code === "auth/configuration-not-found") return "This sign-in method is not enabled in the Firebase Console. Please enable it in Authentication > Sign-in method."
+    if (err instanceof Error) {
+      return err.message.replace(/Firebase:\s*/, "").replace(/\(auth\/.*\)\.?/, "").trim() || "Authentication failed"
+    }
+    return "Authentication failed"
   }
 
   const run = async (fn: () => Promise<void>) => {
@@ -39,9 +58,10 @@ export function LoginPage() {
       await fn()
       afterAuth()
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Authentication failed"
-      toast.error(message)
+      const msg = mapAuthError(err)
+      if (msg !== "CANCELLED") {
+        toast.error(msg)
+      }
     } finally {
       setBusy(false)
     }
@@ -49,6 +69,10 @@ export function LoginPage() {
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
+    if (mode === "register" && password !== confirmPassword) {
+      toast.error("Passwords do not match")
+      return
+    }
     if (mode === "signin") {
       void run(() => signInWithEmail(email.trim(), password))
     } else {
@@ -87,6 +111,22 @@ export function LoginPage() {
         }}
       />
 
+      <div className="absolute top-6 right-6 z-50">
+        <MagneticButton>
+          <Button
+            variant="ghost"
+            size="icon"
+            asChild
+            className="size-11 rounded-full bg-white/70 hover:bg-blue-50 border-2 border-white hover:border-blue-200 shadow-[0_4px_20px_rgba(0,0,0,0.08)] hover:shadow-[0_4px_20px_rgba(37,99,235,0.2)] backdrop-blur-xl text-muted-foreground hover:text-blue-600 transition-all duration-300 flex items-center justify-center group"
+          >
+            <Link to={ROUTES.landing}>
+              <X className="size-5 stroke-[2.5] group-hover:scale-110 transition-transform duration-300" />
+              <span className="sr-only">Close</span>
+            </Link>
+          </Button>
+        </MagneticButton>
+      </div>
+
       <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-6 py-16">
         <motion.div
           initial={{ opacity: 0, y: 12 }}
@@ -101,12 +141,14 @@ export function LoginPage() {
               </div>
             </div>
             <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
-              Reconciliation
+              {mode === "signin" ? "Welcome back" : "Create an account"}
             </h1>
             <p className="text-muted-foreground text-sm max-w-sm mx-auto">
-              {reason === "sign_in_required"
-                ? "Sign in to create or edit vendors and purchase orders."
-                : "Sign in to upload invoices and manage your own data."}
+              {mode === "register"
+                ? "Sign up to start processing your invoices automatically."
+                : reason === "sign_in_required"
+                  ? "Sign in to create or edit vendors and purchase orders."
+                  : "Sign in to upload invoices and manage your own data."}
             </p>
           </div>
 
@@ -117,26 +159,30 @@ export function LoginPage() {
             className="space-y-4"
           >
             <div className="grid gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full h-11"
-                disabled={busy}
-                onClick={() => void run(() => signInWithGoogle())}
-              >
-                <GoogleGlyph className="size-4 mr-2" />
-                Continue with Google
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full h-11"
-                disabled={busy}
-                onClick={() => void run(() => signInWithGitHub())}
-              >
-                <Github className="size-4 mr-2" />
-                Continue with GitHub
-              </Button>
+              <MagneticButton className="w-full">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full h-11"
+                  disabled={busy}
+                  onClick={() => void run(() => signInWithGoogle())}
+                >
+                  <GoogleGlyph className="size-4 mr-2" />
+                  Continue with Google
+                </Button>
+              </MagneticButton>
+              <MagneticButton className="w-full">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full h-11"
+                  disabled={busy}
+                  onClick={() => void run(() => signInWithGitHub())}
+                >
+                  <Github className="size-4 mr-2" />
+                  Continue with GitHub
+                </Button>
+              </MagneticButton>
             </div>
 
             <div className="relative py-1">
@@ -178,15 +224,32 @@ export function LoginPage() {
                   disabled={busy}
                 />
               </div>
-              <Button type="submit" className="w-full h-11" disabled={busy}>
-                {busy ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : mode === "signin" ? (
-                  "Sign in"
-                ) : (
-                  "Create account"
-                )}
-              </Button>
+              {mode === "register" && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="confirmPassword">Confirm Password</Label>
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    minLength={6}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    disabled={busy}
+                  />
+                </div>
+              )}
+              <MagneticButton className="w-full mt-2">
+                <Button type="submit" className="w-full h-11" disabled={busy}>
+                  {busy ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : mode === "signin" ? (
+                    "Sign in"
+                  ) : (
+                    "Create account"
+                  )}
+                </Button>
+              </MagneticButton>
             </form>
 
             <p className="text-center text-sm text-muted-foreground">
@@ -196,7 +259,11 @@ export function LoginPage() {
                   <button
                     type="button"
                     className="text-foreground underline-offset-4 hover:underline"
-                    onClick={() => setMode("register")}
+                    onClick={() => {
+                      setMode("register")
+                      setPassword("")
+                      setConfirmPassword("")
+                    }}
                   >
                     Register
                   </button>
@@ -207,7 +274,11 @@ export function LoginPage() {
                   <button
                     type="button"
                     className="text-foreground underline-offset-4 hover:underline"
-                    onClick={() => setMode("signin")}
+                    onClick={() => {
+                      setMode("signin")
+                      setPassword("")
+                      setConfirmPassword("")
+                    }}
                   >
                     Sign in
                   </button>
@@ -229,12 +300,7 @@ export function LoginPage() {
             <p>
               Public demo — do not upload confidential documents.
             </p>
-            <Link
-              to={ROUTES.landing}
-              className="inline-block pt-2 text-foreground/80 hover:text-foreground underline-offset-4 hover:underline"
-            >
-              ← Back to home
-            </Link>
+
           </motion.div>
         </motion.div>
       </div>

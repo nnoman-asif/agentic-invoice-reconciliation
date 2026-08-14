@@ -45,6 +45,7 @@ desktop.ini
 htmlcov/
 .coverage
 coverage.xml
+github_client_secret.txt
 
 # Logs
 *.log
@@ -65,3 +66,7 @@ cloudflare/wrangler.toml
 # Cursor local state / plans (never commit plan files or secrets from here)
 .cursor/
 .cursor/plans/
+
+# Documentation
+DEPLOYMENT_GUIDE.md
+GUIDE.md
