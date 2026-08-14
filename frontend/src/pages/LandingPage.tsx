@@ -78,14 +78,7 @@ export function LandingPage() {
             <span className="font-semibold">Reconciliation</span>
           </div>
           <nav className="flex items-center gap-4">
-            <a
-              href={GITHUB_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              GitHub
-            </a>
+
             <Button asChild size="sm">
               <Link to={ROUTES.dashboard}>
                 Open dashboard
