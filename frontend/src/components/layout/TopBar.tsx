@@ -74,21 +74,7 @@ export function TopBar() {
         </button>
 
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          {/* Health indicator */}
-          {health && (
-            <Badge
-              variant={overallHealthy ? "success" : "warning"}
-              className="hidden md:inline-flex"
-            >
-              <Activity
-                className={cn(
-                  "size-3",
-                  overallHealthy ? "text-success" : "text-warning"
-                )}
-              />
-              {overallHealthy ? "All systems healthy" : "Degraded"}
-            </Badge>
-          )}
+
 
           <NotificationBell />
           <ThemeToggle />

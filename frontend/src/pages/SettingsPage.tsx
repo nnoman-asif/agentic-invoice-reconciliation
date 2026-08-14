@@ -435,10 +435,10 @@ export function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               {[
-                { label: "Relational Database", value: health?.postgres },
-                { label: "In-memory Cache", value: health?.redis },
+                { label: "Database", value: health?.postgres },
+                { label: "Cache", value: health?.redis },
                 { label: "LLM Inference Engine", value: health?.chat_provider ? "healthy" : "unhealthy" },
-                { label: "Vector Search Engine", value: health?.embedding_provider ? "healthy" : "unhealthy" },
+                { label: "Semantic Search engine", value: health?.embedding_provider ? "healthy" : "unhealthy" },
                 {
                   label: "Message Queue",
                   value: health?.queue_depth != null ? "healthy" : "unhealthy",
