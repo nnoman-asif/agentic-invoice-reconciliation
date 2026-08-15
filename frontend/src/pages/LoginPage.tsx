@@ -1,6 +1,6 @@
 import { useState, useEffect, type FormEvent } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import { Github, Loader2, Sparkles, X, Eye, EyeOff } from "lucide-react"
 import { toast } from "sonner"
 
@@ -26,7 +26,7 @@ export function LoginPage() {
   const registerWithEmail = useAuthStore((s) => s.registerWithEmail)
   const me = useAuthStore((s) => s.me)
 
-  const [mode, setMode] = useState<"signin" | "register">("signin")
+  const [mode, setMode] = useState<"signin" | "register" | "forgot">("signin")
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -41,6 +41,37 @@ export function LoginPage() {
   
   // Custom validation states to avoid native browser popups
   const [errors, setErrors] = useState<{name?: string, email?: string, password?: string}>({})
+
+  // Rate Limiting State
+  const [failedAttempts, setFailedAttempts] = useState(() => parseInt(localStorage.getItem('ira_failed_attempts') || '0', 10))
+  const [lockoutUntil, setLockoutUntil] = useState<number | null>(() => {
+    const val = localStorage.getItem('ira_lockout_until')
+    return val ? parseInt(val, 10) : null
+  })
+  const [lockoutRemaining, setLockoutRemaining] = useState<number>(0)
+
+  useEffect(() => {
+    if (lockoutUntil) {
+      const interval = setInterval(() => {
+        const remaining = Math.ceil((lockoutUntil - Date.now()) / 1000)
+        if (remaining <= 0) {
+          setLockoutUntil(null)
+          setFailedAttempts(0)
+          localStorage.removeItem('ira_lockout_until')
+          localStorage.removeItem('ira_failed_attempts')
+          setLockoutRemaining(0)
+          clearInterval(interval)
+        } else {
+          setLockoutRemaining(remaining)
+        }
+      }, 1000)
+      return () => clearInterval(interval)
+    }
+  }, [lockoutUntil])
+
+  const isLockedOut = lockoutUntil !== null && lockoutUntil > Date.now()
+  const formDisabled = busy || isLockedOut
+  const resetPassword = useAuthStore((s) => s.resetPassword)
 
   // Wait for the auth state to actually populate before redirecting
   useEffect(() => {
@@ -73,6 +104,11 @@ export function LoginPage() {
     setBusy(true)
     try {
       await fn()
+      // Success means reset
+      if (mode === 'signin') {
+        setFailedAttempts(0)
+        localStorage.removeItem('ira_failed_attempts')
+      }
       // Do not setBusy(false) here. We rely on useEffect to navigate away once `me` is loaded.
       // This prevents the user from clicking multiple times while `fetchMe` is running in the background.
     } catch (err) {
@@ -80,19 +116,37 @@ export function LoginPage() {
       const msg = mapAuthError(err)
       if (msg !== "CANCELLED") {
         toast.error(msg)
+        if (mode === "signin" && msg === "Invalid email or password") {
+           const newAttempts = failedAttempts + 1
+           setFailedAttempts(newAttempts)
+           localStorage.setItem('ira_failed_attempts', newAttempts.toString())
+           if (newAttempts >= 5) {
+             const until = Date.now() + 60 * 1000
+             setLockoutUntil(until)
+             localStorage.setItem('ira_lockout_until', until.toString())
+             toast.error("Too many failed attempts. Try again in 1 minute.")
+           }
+        }
       }
     }
   }
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
+    if (isLockedOut) return
     
     // Clear old errors
     const newErrors: {name?: string, email?: string, password?: string} = {}
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
     if (mode === "register" && !name.trim()) newErrors.name = "Name is required"
     if (!email.trim()) newErrors.email = "Email is required"
-    if (!password.trim()) newErrors.password = "Password is required"
-    else if (password.length < 6) newErrors.password = "Password must be at least 6 characters"
+    else if (!emailRegex.test(email.trim())) newErrors.email = "Please enter a valid email address"
+    
+    if (mode !== "forgot") {
+      if (!password.trim()) newErrors.password = "Password is required"
+      else if (password.length < 6) newErrors.password = "Password must be at least 6 characters"
+    }
     
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
@@ -100,6 +154,16 @@ export function LoginPage() {
     }
     
     setErrors({})
+
+    if (mode === "forgot") {
+      void run(async () => {
+        await resetPassword(email.trim())
+        toast.success("Password reset email sent. Please check your inbox.")
+        setMode("signin")
+        setBusy(false)
+      })
+      return
+    }
 
     if (mode === "register" && passwordMatchError) {
       return
@@ -173,14 +237,16 @@ export function LoginPage() {
               </div>
             </div>
             <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
-              {mode === "signin" ? "Welcome back" : "Create an account"}
+              {mode === "signin" ? "Welcome back" : mode === "register" ? "Create an account" : "Reset Password"}
             </h1>
-            <p className="text-muted-foreground text-sm max-w-sm mx-auto">
+            <p className="text-muted-foreground text-sm max-w-sm mx-auto min-h-[40px]">
               {mode === "register"
                 ? "Sign up to start processing your invoices automatically."
-                : reason === "sign_in_required"
-                  ? "Sign in to create or edit vendors and purchase orders."
-                  : "Sign in to upload invoices and manage your own data."}
+                : mode === "forgot"
+                  ? "Enter your email address and we will send you a link to reset your password."
+                  : reason === "sign_in_required"
+                    ? "Sign in to create or edit vendors and purchase orders."
+                    : "Sign in to upload invoices and manage your own data."}
             </p>
           </div>
 
@@ -190,47 +256,68 @@ export function LoginPage() {
             transition={{ delay: 0.08, duration: 0.4 }}
             className="space-y-4"
           >
-            <div className="grid gap-2">
-              <MagneticButton className="w-full">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full h-11"
-                  disabled={busy}
-                  onClick={() => void run(() => signInWithGoogle())}
+            <AnimatePresence mode="popLayout" initial={false}>
+              {mode !== "forgot" && (
+                <motion.div
+                  key="social-buttons"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.3, ease: "easeInOut" }}
+                  className="overflow-hidden"
                 >
-                  <GoogleGlyph className="size-4 mr-2" />
-                  Continue with Google
-                </Button>
-              </MagneticButton>
-              <MagneticButton className="w-full">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full h-11"
-                  disabled={busy}
-                  onClick={() => void run(() => signInWithGitHub())}
-                >
-                  <Github className="size-4 mr-2" />
-                  Continue with GitHub
-                </Button>
-              </MagneticButton>
-            </div>
+                  <div className="grid gap-2">
+                    <MagneticButton className="w-full">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full h-11"
+                        disabled={formDisabled}
+                        onClick={() => void run(() => signInWithGoogle())}
+                      >
+                        <GoogleGlyph className="size-4 mr-2" />
+                        Continue with Google
+                      </Button>
+                    </MagneticButton>
+                    <MagneticButton className="w-full">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full h-11"
+                        disabled={formDisabled}
+                        onClick={() => void run(() => signInWithGitHub())}
+                      >
+                        <Github className="size-4 mr-2" />
+                        Continue with GitHub
+                      </Button>
+                    </MagneticButton>
+                  </div>
 
-            <div className="relative py-1">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-border/70" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase tracking-wide">
-                <span className="bg-background px-3 text-muted-foreground">
-                  or email
-                </span>
-              </div>
-            </div>
+                  <div className="relative py-4">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-border/70" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase tracking-wide">
+                      <span className="bg-background px-3 text-muted-foreground">
+                        or email
+                      </span>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <form onSubmit={onSubmit} className="space-y-3" noValidate>
+              <AnimatePresence mode="popLayout" initial={false}>
               {mode === "register" && (
-                <div className="space-y-1.5">
+                <motion.div
+                  key="name-field"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.3, ease: "easeInOut" }}
+                  className="space-y-1.5 overflow-hidden"
+                >
                   <Label htmlFor="name">Name</Label>
                   <Input
                     id="name"
@@ -241,12 +328,13 @@ export function LoginPage() {
                       setName(e.target.value)
                       if (errors.name) setErrors(prev => ({...prev, name: undefined}))
                     }}
-                    disabled={busy}
+                    disabled={formDisabled}
                     className={errors.name ? "border-red-500 focus-visible:ring-red-500" : ""}
                   />
                   {errors.name && <p className="text-[11px] text-red-500 font-medium">{errors.name}</p>}
-                </div>
+                </motion.div>
               )}
+              </AnimatePresence>
               <div className="space-y-1.5">
                 <Label htmlFor="email">Email</Label>
                 <Input
@@ -258,13 +346,37 @@ export function LoginPage() {
                     setEmail(e.target.value)
                     if (errors.email) setErrors(prev => ({...prev, email: undefined}))
                   }}
-                  disabled={busy}
+                  disabled={formDisabled}
                   className={errors.email ? "border-red-500 focus-visible:ring-red-500" : ""}
                 />
                 {errors.email && <p className="text-[11px] text-red-500 font-medium">{errors.email}</p>}
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="password">Password</Label>
+              <AnimatePresence mode="popLayout" initial={false}>
+              {mode !== "forgot" && (
+                <motion.div
+                  key="password-field"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.3, ease: "easeInOut" }}
+                  className="space-y-1.5 overflow-hidden"
+                >
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="password">Password</Label>
+                    {mode === "signin" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMode("forgot")
+                          setErrors({})
+                        }}
+                        className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
+                        tabIndex={-1}
+                      >
+                        Forgot password?
+                      </button>
+                    )}
+                  </div>
                 <div className="relative">
                   <Input
                     id="password"
@@ -277,7 +389,7 @@ export function LoginPage() {
                       setPassword(e.target.value)
                       if (errors.password) setErrors(prev => ({...prev, password: undefined}))
                     }}
-                    disabled={busy}
+                    disabled={formDisabled}
                     className={errors.password ? "border-red-500 focus-visible:ring-red-500 pr-10" : "pr-10"}
                   />
                   <button
@@ -290,9 +402,19 @@ export function LoginPage() {
                   </button>
                 </div>
                 {errors.password && <p className="text-[11px] text-red-500 font-medium">{errors.password}</p>}
-              </div>
+                </motion.div>
+              )}
+              </AnimatePresence>
+              <AnimatePresence mode="popLayout" initial={false}>
               {mode === "register" && (
-                <div className="space-y-1.5">
+                <motion.div
+                  key="confirm-password-field"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.3, ease: "easeInOut" }}
+                  className="space-y-1.5 overflow-hidden"
+                >
                   <Label htmlFor="confirmPassword">Confirm Password</Label>
                   <div className="relative">
                     <Input
@@ -301,7 +423,7 @@ export function LoginPage() {
                       autoComplete="new-password"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      disabled={busy}
+                      disabled={formDisabled}
                       className={passwordMatchError ? "border-red-500 focus-visible:ring-red-500 pr-10" : "pr-10"}
                     />
                     <button
@@ -318,56 +440,89 @@ export function LoginPage() {
                       {passwordMatchError}
                     </p>
                   )}
-                </div>
+                </motion.div>
               )}
-              <MagneticButton className="w-full mt-2">
-                <Button type="submit" className="w-full h-11" disabled={busy}>
-                  {busy ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : mode === "signin" ? (
-                    "Sign in"
-                  ) : (
-                    "Create account"
-                  )}
-                </Button>
-              </MagneticButton>
+              </AnimatePresence>
+              <div className="pt-2">
+                <MagneticButton className="w-full">
+                  <Button type="submit" className="w-full h-11" disabled={formDisabled}>
+                    {busy ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : isLockedOut ? (
+                      `Locked out (${lockoutRemaining}s)`
+                    ) : mode === "signin" ? (
+                      "Sign in"
+                    ) : mode === "forgot" ? (
+                      "Send reset link"
+                    ) : (
+                      "Create account"
+                    )}
+                  </Button>
+                </MagneticButton>
+              </div>
             </form>
 
-            <p className="text-center text-sm text-muted-foreground">
-              {mode === "signin" ? (
-                <>
-                  No account?{" "}
-                  <button
-                    type="button"
-                    className="text-foreground underline-offset-4 hover:underline"
-                    onClick={() => {
-                      setMode("register")
-                      setErrors({})
-                      setPassword("")
-                      setConfirmPassword("")
-                    }}
-                  >
-                    Register
-                  </button>
-                </>
-              ) : (
-                <>
-                  Already registered?{" "}
-                  <button
-                    type="button"
-                    className="text-foreground underline-offset-4 hover:underline"
-                    onClick={() => {
-                      setMode("signin")
-                      setErrors({})
-                      setPassword("")
-                      setConfirmPassword("")
-                    }}
-                  >
-                    Sign in
-                  </button>
-                </>
-              )}
-            </p>
+            <div className="h-5">
+              <AnimatePresence mode="wait">
+                <motion.p 
+                  key={mode}
+                  initial={{ opacity: 0, y: -5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 5 }}
+                  transition={{ duration: 0.15 }}
+                  className="text-center text-sm text-muted-foreground m-0"
+                >
+                  {mode === "signin" ? (
+                    <>
+                      No account?{" "}
+                      <button
+                        type="button"
+                        className="text-foreground underline-offset-4 hover:underline"
+                        onClick={() => {
+                          setMode("register")
+                          setErrors({})
+                          setPassword("")
+                          setConfirmPassword("")
+                        }}
+                      >
+                        Register
+                      </button>
+                    </>
+                  ) : mode === "register" ? (
+                    <>
+                      Already registered?{" "}
+                      <button
+                        type="button"
+                        className="text-foreground underline-offset-4 hover:underline"
+                        onClick={() => {
+                          setMode("signin")
+                          setErrors({})
+                          setPassword("")
+                          setConfirmPassword("")
+                        }}
+                      >
+                        Sign in
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      Remembered your password?{" "}
+                      <button
+                        type="button"
+                        className="text-foreground underline-offset-4 hover:underline"
+                        onClick={() => {
+                          setMode("signin")
+                          setErrors({})
+                          setPassword("")
+                        }}
+                      >
+                        Sign in
+                      </button>
+                    </>
+                  )}
+                </motion.p>
+              </AnimatePresence>
+            </div>
           </motion.div>
 
           <motion.div

@@ -5,6 +5,7 @@ import {
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut as firebaseSignOut,
+  sendPasswordResetEmail,
   updateProfile,
   type User,
 } from "firebase/auth"
@@ -37,6 +38,7 @@ interface AuthState {
   signInWithGitHub: () => Promise<void>
   signInWithEmail: (email: string, password: string) => Promise<void>
   registerWithEmail: (name: string, email: string, password: string) => Promise<void>
+  resetPassword: (email: string) => Promise<void>
   signOut: () => Promise<void>
   deleteAccount: () => Promise<void>
   isGuest: () => boolean
@@ -159,6 +161,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await user.getIdToken(true) // Force token refresh to include the new name
       await get().refreshMe() // Sync the new name to the backend database
     }
+  },
+
+  resetPassword: async (email) => {
+    const auth = getFirebaseAuth()
+    await sendPasswordResetEmail(auth, email)
   },
 
   signOut: async () => {
