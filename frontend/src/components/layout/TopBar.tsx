@@ -88,7 +88,7 @@ export function TopBar() {
                 aria-label="Account"
               >
                 <div className="size-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-semibold shadow-inner transition-transform hover:scale-105">
-                  {me?.display_name ? me.display_name.slice(0, 2).toUpperCase() : "IA"}
+                  {me?.display_name ? me.display_name.slice(0, 2).toUpperCase() : me?.email ? me.email.slice(0, 2).toUpperCase() : <User className="size-4" />}
                 </div>
               </Button>
             </DropdownMenuTrigger>

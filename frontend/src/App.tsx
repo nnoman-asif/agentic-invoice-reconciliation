@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo } from "react"
+import { lazy, Suspense, useMemo, useEffect } from "react"
 import { Routes, Route, useLocation, useNavigate } from "react-router-dom"
 
 import { AppShell } from "@/components/layout/AppShell"
@@ -17,6 +17,7 @@ import { ROUTES } from "@/lib/routes"
 import { useTheme } from "@/hooks/useTheme"
 import { useInvoiceNotifications } from "@/hooks/useInvoiceNotifications"
 import { useShortcuts, type Shortcut } from "@/hooks/useShortcuts"
+import { useAuthStore } from "@/store/auth"
 
 import { LandingPage } from "@/pages/LandingPage"
 import { LoginPage } from "@/pages/LoginPage"
@@ -50,6 +51,11 @@ export default function App() {
   useTheme() // initialize theme
   useInvoiceNotifications() // global cross-page notification dispatcher
   useGlobalShortcuts()
+
+  const initAuth = useAuthStore((s) => s.init)
+  useEffect(() => {
+    return initAuth()
+  }, [initAuth])
 
   const location = useLocation()
 

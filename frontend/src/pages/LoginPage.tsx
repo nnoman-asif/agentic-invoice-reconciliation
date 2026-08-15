@@ -63,13 +63,14 @@ export function LoginPage() {
     setBusy(true)
     try {
       await fn()
+      // Do not setBusy(false) here. We rely on useEffect to navigate away once `me` is loaded.
+      // This prevents the user from clicking multiple times while `fetchMe` is running in the background.
     } catch (err) {
+      setBusy(false)
       const msg = mapAuthError(err)
       if (msg !== "CANCELLED") {
         toast.error(msg)
       }
-    } finally {
-      setBusy(false)
     }
   }
 

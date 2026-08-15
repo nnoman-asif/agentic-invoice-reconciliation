@@ -30,11 +30,6 @@ export function RequireAuth() {
   const ready = useAuthStore((s) => s.ready)
   const firebaseUser = useAuthStore((s) => s.firebaseUser)
   const guestToken = useAuthStore((s) => s.guestToken)
-  const init = useAuthStore((s) => s.init)
-
-  useEffect(() => {
-    return init()
-  }, [init])
 
   if (!AUTH_ENABLED) {
     return <Outlet />
