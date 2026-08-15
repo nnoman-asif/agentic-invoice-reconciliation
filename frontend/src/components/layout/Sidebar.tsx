@@ -13,6 +13,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react"
+import { AppLogo } from "@/components/shared/AppLogo"
 import { motion } from "framer-motion"
 
 import { cn } from "@/lib/utils"
@@ -59,9 +60,7 @@ export function Sidebar() {
         aria-label="Back to landing page"
         className="flex items-center gap-3 px-4 h-16 border-b border-border/60 hover:bg-accent/30 transition-colors"
       >
-        <div className="size-9 shrink-0 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-glow">
-          <FileSearch className="size-4 text-white" />
-        </div>
+        <AppLogo size="md" />
         {!collapsed && (
           <motion.div
             initial={{ opacity: 0, x: -8 }}

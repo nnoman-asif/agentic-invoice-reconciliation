@@ -12,6 +12,7 @@ import {
   Building2,
   Settings,
 } from "lucide-react"
+import { AppLogo } from "@/components/shared/AppLogo"
 import { create } from "zustand"
 
 import {
@@ -75,9 +76,7 @@ export function MobileSidebar() {
             aria-label="Back to landing page"
             className="flex items-center gap-3 -mx-2 px-2 py-1 rounded-lg hover:bg-accent/30 transition-colors"
           >
-            <div className="size-9 shrink-0 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-glow">
-              <FileSearch className="size-4 text-white" />
-            </div>
+            <AppLogo size="md" />
             <div className="flex flex-col leading-tight text-left">
               <SheetTitle className="text-sm">Reconciliation</SheetTitle>
               <SheetDescription className="text-[11px]">

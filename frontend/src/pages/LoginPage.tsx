@@ -1,7 +1,8 @@
 import { useState, useEffect, type FormEvent } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
-import { Github, Loader2, Sparkles, X, Eye, EyeOff } from "lucide-react"
+import { Github, Loader2, X, Eye, EyeOff } from "lucide-react"
+import { AppLogo } from "@/components/shared/AppLogo"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -232,9 +233,7 @@ export function LoginPage() {
         >
           <div className="text-center space-y-3">
             <div className="inline-flex items-center gap-2.5">
-              <div className="size-11 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-[0_0_24px_-4px_hsl(217_91%_60%/0.55)]">
-                <Sparkles className="size-5 text-white" />
-              </div>
+              <AppLogo size="lg" />
             </div>
             <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
               {mode === "signin" ? "Welcome back" : mode === "register" ? "Create an account" : "Reset Password"}

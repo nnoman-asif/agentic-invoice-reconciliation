@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "react-router-dom"
 import { motion } from "framer-motion"
-import { ArrowRight, Play, Sparkles } from "lucide-react"
+import { ArrowRight, Play } from "lucide-react"
+import { AppLogo } from "@/components/shared/AppLogo"
 import { useState } from "react"
 
 import { Button } from "@/components/ui/button"
@@ -72,9 +73,7 @@ export function LandingPage() {
       <header className="relative z-10">
         <div className="max-w-7xl mx-auto px-6 py-6 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="size-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-glow">
-              <Sparkles className="size-4 text-white" />
-            </div>
+            <AppLogo size="md" />
             <span className="font-semibold">Reconciliation</span>
           </div>
           <nav className="flex items-center gap-4">
