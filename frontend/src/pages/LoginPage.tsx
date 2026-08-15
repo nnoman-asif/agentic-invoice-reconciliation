@@ -256,14 +256,14 @@ export function LoginPage() {
             transition={{ delay: 0.08, duration: 0.4 }}
             className="space-y-4"
           >
-            <AnimatePresence mode="popLayout" initial={false}>
+            <AnimatePresence initial={false}>
               {mode !== "forgot" && (
                 <motion.div
                   key="social-buttons"
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
                   exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.3, ease: "easeInOut" }}
+                  transition={{ type: "spring", bounce: 0, duration: 0.5 }}
                   className="overflow-hidden"
                 >
                   <div className="grid gap-2">
@@ -298,7 +298,7 @@ export function LoginPage() {
                       <div className="w-full border-t border-border/70" />
                     </div>
                     <div className="relative flex justify-center text-xs uppercase tracking-wide">
-                      <span className="bg-background px-3 text-muted-foreground">
+                      <span className="bg-background/60 backdrop-blur-md px-3 py-1 rounded-full text-muted-foreground">
                         or email
                       </span>
                     </div>
@@ -307,35 +307,37 @@ export function LoginPage() {
               )}
             </AnimatePresence>
 
-            <form onSubmit={onSubmit} className="space-y-3" noValidate>
-              <AnimatePresence mode="popLayout" initial={false}>
+            <form onSubmit={onSubmit} className="w-full" noValidate>
+              <AnimatePresence initial={false}>
               {mode === "register" && (
                 <motion.div
                   key="name-field"
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
                   exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.3, ease: "easeInOut" }}
-                  className="space-y-1.5 overflow-hidden"
+                  transition={{ type: "spring", bounce: 0, duration: 0.5 }}
+                  className="overflow-hidden"
                 >
-                  <Label htmlFor="name">Name</Label>
-                  <Input
-                    id="name"
-                    type="text"
-                    autoComplete="name"
-                    value={name}
-                    onChange={(e) => {
-                      setName(e.target.value)
-                      if (errors.name) setErrors(prev => ({...prev, name: undefined}))
-                    }}
-                    disabled={formDisabled}
-                    className={errors.name ? "border-red-500 focus-visible:ring-red-500" : ""}
-                  />
-                  {errors.name && <p className="text-[11px] text-red-500 font-medium">{errors.name}</p>}
+                  <div className="space-y-1.5 mb-3 pt-1">
+                    <Label htmlFor="name">Name</Label>
+                    <Input
+                      id="name"
+                      type="text"
+                      autoComplete="name"
+                      value={name}
+                      onChange={(e) => {
+                        setName(e.target.value)
+                        if (errors.name) setErrors(prev => ({...prev, name: undefined}))
+                      }}
+                      disabled={formDisabled}
+                      className={errors.name ? "border-red-500 focus-visible:ring-red-500" : ""}
+                    />
+                    {errors.name && <p className="text-[11px] text-red-500 font-medium">{errors.name}</p>}
+                  </div>
                 </motion.div>
               )}
               </AnimatePresence>
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 mb-3">
                 <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
@@ -351,80 +353,47 @@ export function LoginPage() {
                 />
                 {errors.email && <p className="text-[11px] text-red-500 font-medium">{errors.email}</p>}
               </div>
-              <AnimatePresence mode="popLayout" initial={false}>
+              <AnimatePresence initial={false}>
               {mode !== "forgot" && (
                 <motion.div
                   key="password-field"
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
                   exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.3, ease: "easeInOut" }}
-                  className="space-y-1.5 overflow-hidden"
+                  transition={{ type: "spring", bounce: 0, duration: 0.5 }}
+                  className="overflow-hidden"
                 >
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="password">Password</Label>
-                    {mode === "signin" && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setMode("forgot")
-                          setErrors({})
-                        }}
-                        className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
-                        tabIndex={-1}
-                      >
-                        Forgot password?
-                      </button>
-                    )}
-                  </div>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    autoComplete={
-                      mode === "signin" ? "current-password" : "new-password"
-                    }
-                    value={password}
-                    onChange={(e) => {
-                      setPassword(e.target.value)
-                      if (errors.password) setErrors(prev => ({...prev, password: undefined}))
-                    }}
-                    disabled={formDisabled}
-                    className={errors.password ? "border-red-500 focus-visible:ring-red-500 pr-10" : "pr-10"}
-                  />
-                  <button
-                    type="button"
-                    tabIndex={-1}
-                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground transition-colors"
-                    onClick={() => setShowPassword(!showPassword)}
-                  >
-                    {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                  </button>
-                </div>
-                {errors.password && <p className="text-[11px] text-red-500 font-medium">{errors.password}</p>}
-                </motion.div>
-              )}
-              </AnimatePresence>
-              <AnimatePresence mode="popLayout" initial={false}>
-              {mode === "register" && (
-                <motion.div
-                  key="confirm-password-field"
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.3, ease: "easeInOut" }}
-                  className="space-y-1.5 overflow-hidden"
-                >
-                  <Label htmlFor="confirmPassword">Confirm Password</Label>
+                  <div className="space-y-1.5 mb-3">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="password">Password</Label>
+                      {mode === "signin" && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMode("forgot")
+                            setErrors({})
+                          }}
+                          className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
+                          tabIndex={-1}
+                        >
+                          Forgot password?
+                        </button>
+                      )}
+                    </div>
                   <div className="relative">
                     <Input
-                      id="confirmPassword"
+                      id="password"
                       type={showPassword ? "text" : "password"}
-                      autoComplete="new-password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      autoComplete={
+                        mode === "signin" ? "current-password" : "new-password"
+                      }
+                      value={password}
+                      onChange={(e) => {
+                        setPassword(e.target.value)
+                        if (errors.password) setErrors(prev => ({...prev, password: undefined}))
+                      }}
                       disabled={formDisabled}
-                      className={passwordMatchError ? "border-red-500 focus-visible:ring-red-500 pr-10" : "pr-10"}
+                      className={errors.password ? "border-red-500 focus-visible:ring-red-500 pr-10" : "pr-10"}
                     />
                     <button
                       type="button"
@@ -435,11 +404,48 @@ export function LoginPage() {
                       {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                     </button>
                   </div>
-                  {passwordMatchError && (
-                    <p className="text-[11px] text-red-500 font-medium animate-in slide-in-from-top-1 fade-in duration-200">
-                      {passwordMatchError}
-                    </p>
-                  )}
+                  {errors.password && <p className="text-[11px] text-red-500 font-medium">{errors.password}</p>}
+                  </div>
+                </motion.div>
+              )}
+              </AnimatePresence>
+              <AnimatePresence initial={false}>
+              {mode === "register" && (
+                <motion.div
+                  key="confirm-password-field"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ type: "spring", bounce: 0, duration: 0.5 }}
+                  className="overflow-hidden"
+                >
+                  <div className="space-y-1.5 mb-3">
+                    <Label htmlFor="confirmPassword">Confirm Password</Label>
+                    <div className="relative">
+                      <Input
+                        id="confirmPassword"
+                        type={showPassword ? "text" : "password"}
+                        autoComplete="new-password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        disabled={formDisabled}
+                        className={passwordMatchError ? "border-red-500 focus-visible:ring-red-500 pr-10" : "pr-10"}
+                      />
+                      <button
+                        type="button"
+                        tabIndex={-1}
+                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground transition-colors"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                      </button>
+                    </div>
+                    {passwordMatchError && (
+                      <p className="text-[11px] text-red-500 font-medium animate-in slide-in-from-top-1 fade-in duration-200">
+                        {passwordMatchError}
+                      </p>
+                    )}
+                  </div>
                 </motion.div>
               )}
               </AnimatePresence>
@@ -462,22 +468,22 @@ export function LoginPage() {
               </div>
             </form>
 
-            <div className="h-5">
+            <div className="pt-2 flex flex-col items-center min-h-[40px] justify-center">
               <AnimatePresence mode="wait">
-                <motion.p 
+                <motion.div 
                   key={mode}
-                  initial={{ opacity: 0, y: -5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 5 }}
-                  transition={{ duration: 0.15 }}
-                  className="text-center text-sm text-muted-foreground m-0"
+                  initial={{ opacity: 0, filter: "blur(4px)", scale: 0.95 }}
+                  animate={{ opacity: 1, filter: "blur(0px)", scale: 1 }}
+                  exit={{ opacity: 0, filter: "blur(4px)", scale: 0.95 }}
+                  transition={{ duration: 0.25 }}
+                  className="text-center text-sm text-muted-foreground"
                 >
                   {mode === "signin" ? (
-                    <>
-                      No account?{" "}
+                    <div className="flex items-center gap-1.5 justify-center bg-muted/40 px-4 py-2 rounded-full border border-border/50">
+                      <span>No account?</span>
                       <button
                         type="button"
-                        className="text-foreground underline-offset-4 hover:underline"
+                        className="text-foreground font-medium underline-offset-4 hover:underline transition-all"
                         onClick={() => {
                           setMode("register")
                           setErrors({})
@@ -487,13 +493,13 @@ export function LoginPage() {
                       >
                         Register
                       </button>
-                    </>
+                    </div>
                   ) : mode === "register" ? (
-                    <>
-                      Already registered?{" "}
+                    <div className="flex items-center gap-1.5 justify-center bg-muted/40 px-4 py-2 rounded-full border border-border/50">
+                      <span>Already registered?</span>
                       <button
                         type="button"
-                        className="text-foreground underline-offset-4 hover:underline"
+                        className="text-foreground font-medium underline-offset-4 hover:underline transition-all"
                         onClick={() => {
                           setMode("signin")
                           setErrors({})
@@ -503,13 +509,13 @@ export function LoginPage() {
                       >
                         Sign in
                       </button>
-                    </>
+                    </div>
                   ) : (
-                    <>
-                      Remembered your password?{" "}
+                    <div className="flex items-center gap-1.5 justify-center bg-muted/40 px-4 py-2 rounded-full border border-border/50">
+                      <span>Remembered your password?</span>
                       <button
                         type="button"
-                        className="text-foreground underline-offset-4 hover:underline"
+                        className="text-foreground font-medium underline-offset-4 hover:underline transition-all"
                         onClick={() => {
                           setMode("signin")
                           setErrors({})
@@ -518,9 +524,9 @@ export function LoginPage() {
                       >
                         Sign in
                       </button>
-                    </>
+                    </div>
                   )}
-                </motion.p>
+                </motion.div>
               </AnimatePresence>
             </div>
           </motion.div>
