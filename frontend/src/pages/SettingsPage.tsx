@@ -306,7 +306,7 @@ export function SettingsPage() {
             <CardHeader>
               <CardTitle>Daily invoice quota</CardTitle>
               <CardDescription>
-                Usage is counted when an invoice reaches the LLM — PDFs
+                Usage is counted when an invoice reaches the LLM - PDFs
                 rejected by the upload gate do not consume quota.
               </CardDescription>
             </CardHeader>
