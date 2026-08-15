@@ -1,7 +1,7 @@
 import { useState, useEffect, type FormEvent } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
 import { motion } from "framer-motion"
-import { Github, Loader2, Sparkles, X } from "lucide-react"
+import { Github, Loader2, Sparkles, X, Eye, EyeOff } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -27,10 +27,20 @@ export function LoginPage() {
   const me = useAuthStore((s) => s.me)
 
   const [mode, setMode] = useState<"signin" | "register">("signin")
+  const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
   const [busy, setBusy] = useState(false)
+
+  // Live password matching state
+  const passwordMatchError = mode === "register" && confirmPassword.length > 0 && password !== confirmPassword 
+    ? "Passwords do not match" 
+    : ""
+  
+  // Custom validation states to avoid native browser popups
+  const [errors, setErrors] = useState<{name?: string, email?: string, password?: string}>({})
 
   // Wait for the auth state to actually populate before redirecting
   useEffect(() => {
@@ -76,14 +86,29 @@ export function LoginPage() {
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
-    if (mode === "register" && password !== confirmPassword) {
-      toast.error("Passwords do not match")
+    
+    // Clear old errors
+    const newErrors: {name?: string, email?: string, password?: string} = {}
+    if (mode === "register" && !name.trim()) newErrors.name = "Name is required"
+    if (!email.trim()) newErrors.email = "Email is required"
+    if (!password.trim()) newErrors.password = "Password is required"
+    else if (password.length < 6) newErrors.password = "Password must be at least 6 characters"
+    
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
       return
     }
+    
+    setErrors({})
+
+    if (mode === "register" && passwordMatchError) {
+      return
+    }
+
     if (mode === "signin") {
       void run(() => signInWithEmail(email.trim(), password))
     } else {
-      void run(() => registerWithEmail(email.trim(), password))
+      void run(() => registerWithEmail(name.trim(), email.trim(), password))
     }
   }
 
@@ -203,47 +228,96 @@ export function LoginPage() {
               </div>
             </div>
 
-            <form onSubmit={onSubmit} className="space-y-3">
+            <form onSubmit={onSubmit} className="space-y-3" noValidate>
+              {mode === "register" && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="name">Name</Label>
+                  <Input
+                    id="name"
+                    type="text"
+                    autoComplete="name"
+                    value={name}
+                    onChange={(e) => {
+                      setName(e.target.value)
+                      if (errors.name) setErrors(prev => ({...prev, name: undefined}))
+                    }}
+                    disabled={busy}
+                    className={errors.name ? "border-red-500 focus-visible:ring-red-500" : ""}
+                  />
+                  {errors.name && <p className="text-[11px] text-red-500 font-medium">{errors.name}</p>}
+                </div>
+              )}
               <div className="space-y-1.5">
                 <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
                   type="email"
                   autoComplete="email"
-                  required
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value)
+                    if (errors.email) setErrors(prev => ({...prev, email: undefined}))
+                  }}
                   disabled={busy}
+                  className={errors.email ? "border-red-500 focus-visible:ring-red-500" : ""}
                 />
+                {errors.email && <p className="text-[11px] text-red-500 font-medium">{errors.email}</p>}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  autoComplete={
-                    mode === "signin" ? "current-password" : "new-password"
-                  }
-                  required
-                  minLength={6}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={busy}
-                />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete={
+                      mode === "signin" ? "current-password" : "new-password"
+                    }
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value)
+                      if (errors.password) setErrors(prev => ({...prev, password: undefined}))
+                    }}
+                    disabled={busy}
+                    className={errors.password ? "border-red-500 focus-visible:ring-red-500 pr-10" : "pr-10"}
+                  />
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground transition-colors"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
+                {errors.password && <p className="text-[11px] text-red-500 font-medium">{errors.password}</p>}
               </div>
               {mode === "register" && (
                 <div className="space-y-1.5">
                   <Label htmlFor="confirmPassword">Confirm Password</Label>
-                  <Input
-                    id="confirmPassword"
-                    type="password"
-                    autoComplete="new-password"
-                    required
-                    minLength={6}
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    disabled={busy}
-                  />
+                  <div className="relative">
+                    <Input
+                      id="confirmPassword"
+                      type={showPassword ? "text" : "password"}
+                      autoComplete="new-password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      disabled={busy}
+                      className={passwordMatchError ? "border-red-500 focus-visible:ring-red-500 pr-10" : "pr-10"}
+                    />
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground transition-colors"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    </button>
+                  </div>
+                  {passwordMatchError && (
+                    <p className="text-[11px] text-red-500 font-medium animate-in slide-in-from-top-1 fade-in duration-200">
+                      {passwordMatchError}
+                    </p>
+                  )}
                 </div>
               )}
               <MagneticButton className="w-full mt-2">
@@ -268,6 +342,7 @@ export function LoginPage() {
                     className="text-foreground underline-offset-4 hover:underline"
                     onClick={() => {
                       setMode("register")
+                      setErrors({})
                       setPassword("")
                       setConfirmPassword("")
                     }}
@@ -283,6 +358,7 @@ export function LoginPage() {
                     className="text-foreground underline-offset-4 hover:underline"
                     onClick={() => {
                       setMode("signin")
+                      setErrors({})
                       setPassword("")
                       setConfirmPassword("")
                     }}
