@@ -78,12 +78,14 @@ export function LandingPage() {
           </div>
           <nav className="flex items-center gap-4">
 
-            <Button asChild size="sm">
-              <Link to={ROUTES.dashboard}>
-                Open dashboard
-                <ArrowRight className="size-3.5" />
-              </Link>
-            </Button>
+            <MagneticButton>
+              <Button asChild size="sm">
+                <Link to={ROUTES.dashboard}>
+                  Open dashboard
+                  <ArrowRight className="size-3.5" />
+                </Link>
+              </Button>
+            </MagneticButton>
           </nav>
         </div>
       </header>
