@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react"
+import { useState, useEffect, type FormEvent } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
 import { motion } from "framer-motion"
 import { Github, Loader2, Sparkles, X } from "lucide-react"
@@ -24,6 +24,7 @@ export function LoginPage() {
   const signInWithGitHub = useAuthStore((s) => s.signInWithGitHub)
   const signInWithEmail = useAuthStore((s) => s.signInWithEmail)
   const registerWithEmail = useAuthStore((s) => s.registerWithEmail)
+  const me = useAuthStore((s) => s.me)
 
   const [mode, setMode] = useState<"signin" | "register">("signin")
   const [email, setEmail] = useState("")
@@ -31,9 +32,12 @@ export function LoginPage() {
   const [confirmPassword, setConfirmPassword] = useState("")
   const [busy, setBusy] = useState(false)
 
-  const afterAuth = () => {
-    navigate(from, { replace: true })
-  }
+  // Wait for the auth state to actually populate before redirecting
+  useEffect(() => {
+    if (me) {
+      navigate(from, { replace: true })
+    }
+  }, [me, navigate, from])
 
   const mapAuthError = (err: any): string => {
     const code = err?.code || ""
@@ -59,7 +63,6 @@ export function LoginPage() {
     setBusy(true)
     try {
       await fn()
-      afterAuth()
     } catch (err) {
       const msg = mapAuthError(err)
       if (msg !== "CANCELLED") {

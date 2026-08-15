@@ -25,15 +25,9 @@ def scope_to_owner(
     *,
     include_system: bool = False,
 ) -> Select:
-    """Restrict a select to rows the owner can read.
-
-    When ``include_system`` is True, also include rows owned by the
-    permanent system user (shared demo reference data).
-    """
-    if include_system:
-        return stmt.where(
-            or_(model.owner_id == owner_id, model.owner_id == SYSTEM_USER_ID)
-        )
+    """Restrict a select to rows the owner can read."""
+    # We ignore include_system here to ensure regular users get a fresh
+    # workspace and do not see the shared demo reference data.
     return stmt.where(model.owner_id == owner_id)
 
 
