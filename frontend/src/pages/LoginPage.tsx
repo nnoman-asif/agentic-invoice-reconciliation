@@ -260,11 +260,10 @@ export function LoginPage() {
               {mode !== "forgot" && (
                 <motion.div
                   key="social-buttons"
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
+                  initial={{ opacity: 0, height: 0, overflow: "hidden" }}
+                  animate={{ opacity: 1, height: "auto", transitionEnd: { overflow: "visible" } }}
+                  exit={{ opacity: 0, height: 0, overflow: "hidden" }}
                   transition={{ type: "spring", bounce: 0, duration: 0.5 }}
-                  className="overflow-hidden"
                 >
                   <div className="grid gap-2">
                     <MagneticButton className="w-full">
@@ -312,11 +311,10 @@ export function LoginPage() {
               {mode === "register" && (
                 <motion.div
                   key="name-field"
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
+                  initial={{ opacity: 0, height: 0, overflow: "hidden" }}
+                  animate={{ opacity: 1, height: "auto", transitionEnd: { overflow: "visible" } }}
+                  exit={{ opacity: 0, height: 0, overflow: "hidden" }}
                   transition={{ type: "spring", bounce: 0, duration: 0.5 }}
-                  className="overflow-hidden"
                 >
                   <div className="space-y-1.5 mb-3 pt-1">
                     <Label htmlFor="name">Name</Label>
@@ -357,11 +355,10 @@ export function LoginPage() {
               {mode !== "forgot" && (
                 <motion.div
                   key="password-field"
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
+                  initial={{ opacity: 0, height: 0, overflow: "hidden" }}
+                  animate={{ opacity: 1, height: "auto", transitionEnd: { overflow: "visible" } }}
+                  exit={{ opacity: 0, height: 0, overflow: "hidden" }}
                   transition={{ type: "spring", bounce: 0, duration: 0.5 }}
-                  className="overflow-hidden"
                 >
                   <div className="space-y-1.5 mb-3">
                     <div className="flex items-center justify-between">
@@ -413,11 +410,10 @@ export function LoginPage() {
               {mode === "register" && (
                 <motion.div
                   key="confirm-password-field"
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
+                  initial={{ opacity: 0, height: 0, overflow: "hidden" }}
+                  animate={{ opacity: 1, height: "auto", transitionEnd: { overflow: "visible" } }}
+                  exit={{ opacity: 0, height: 0, overflow: "hidden" }}
                   transition={{ type: "spring", bounce: 0, duration: 0.5 }}
-                  className="overflow-hidden"
                 >
                   <div className="space-y-1.5 mb-3">
                     <Label htmlFor="confirmPassword">Confirm Password</Label>
@@ -542,7 +538,7 @@ export function LoginPage() {
               inactivity.
             </p>
             <p>
-              Public demo — do not upload confidential documents.
+              Public demo - do not upload confidential documents.
             </p>
 
           </motion.div>
