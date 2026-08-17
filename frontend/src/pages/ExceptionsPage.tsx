@@ -38,6 +38,8 @@ import {
   useRejectException,
 } from "@/api/exceptions"
 import { useReconciliationByInvoice } from "@/api/reconciliations"
+import { useAuthStore } from "@/store/auth"
+import { AUTH_ENABLED } from "@/lib/firebase"
 import { formatCurrency, formatRelative, shortId } from "@/lib/format"
 import type { InvoiceListItem } from "@/api/types"
 import { cn } from "@/lib/utils"
@@ -74,6 +76,7 @@ export function ExceptionsPage() {
   const [reconMap, setReconMap] = useState<Record<string, string>>({})
   // Inline error inside the bulk dialog when every action failed
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const canWrite = useAuthStore((s) => !AUTH_ENABLED || Boolean(s.firebaseUser))
 
   const approveMut = useApproveException()
   const rejectMut = useRejectException()
@@ -82,31 +85,40 @@ export function ExceptionsPage() {
   useEffect(() => {
     if (!invoices) return
     setSelected((prev) => {
-      const valid = new Set(invoices.map((i) => i.id))
-      const next = new Set([...prev].filter((id) => valid.has(id)))
-      return next.size === prev.size ? prev : next
+      const next = new Set<string>()
+      for (const id of prev) {
+        if (invoices.some((i) => i.id === id)) next.add(id)
+      }
+      return next
     })
   }, [invoices])
 
-  const selectedReconciliationIds = useMemo(
-    () =>
-      [...selected]
-        .map((invoiceId) => reconMap[invoiceId])
-        .filter((id): id is string => !!id),
-    [selected, reconMap]
-  )
-
   const allSelectableIds = useMemo(
-    () => (invoices ?? []).map((i) => i.id),
+    () => invoices?.map((i) => i.id) ?? [],
     [invoices]
   )
   const allSelected =
     allSelectableIds.length > 0 && selected.size === allSelectableIds.length
 
-  const closeDialog = () => {
-    setDialog({ open: false })
-    setNotes("")
+  // Number of selected invoices whose recon record has loaded and is ready for bulk action
+  const selectedReadyCount = useMemo(() => {
+    let count = 0
+    for (const id of selected) {
+      if (reconMap[id]) count++
+    }
+    return count
+  }, [selected, reconMap])
+
+  const bulkReady =
+    selected.size > 0 && selectedReadyCount === selected.size
+
+  const openBulk = (type: ActionType) => {
+    const reconciliationIds = Array.from(selected)
+      .map((id) => reconMap[id])
+      .filter((id): id is string => Boolean(id))
+    if (reconciliationIds.length === 0) return
     setSubmitError(null)
+    setDialog({ open: true, type, reconciliationIds })
   }
 
   const openSingle = (type: ActionType, reconciliationId: string) => {
@@ -114,63 +126,50 @@ export function ExceptionsPage() {
     setDialog({ open: true, type, reconciliationId })
   }
 
-  // How many of the currently selected invoices have their recon
-  // resolved -- used to gate bulk submit until all are ready, so we
-  // never silently drop selections (bug H3).
-  const selectedReadyCount = selectedReconciliationIds.length
-  const bulkReady =
-    selected.size > 0 && selectedReadyCount === selected.size
-
-  const openBulk = (type: ActionType) => {
-    if (selected.size === 0) {
-      toast.warning("Nothing selected", {
-        description: "Pick one or more invoices first.",
-      })
-      return
-    }
-    if (!bulkReady) {
-      toast.info("Hang on...", {
-        description: `Loading details for ${selected.size - selectedReadyCount} more selection${
-          selected.size - selectedReadyCount === 1 ? "" : "s"
-        }.`,
-      })
-      return
-    }
+  const closeDialog = () => {
+    setDialog({ open: false })
+    setNotes("")
     setSubmitError(null)
-    setDialog({
-      open: true,
-      type,
-      reconciliationIds: selectedReconciliationIds,
-    })
   }
 
-  const submit = async () => {
+  const handleSubmit = async () => {
     if (!dialog.open) return
-    const ids = dialog.reconciliationIds ?? (dialog.reconciliationId ? [dialog.reconciliationId] : [])
+    const ids =
+      dialog.reconciliationIds ??
+      (dialog.reconciliationId ? [dialog.reconciliationId] : [])
     if (ids.length === 0) return
-
-    const trimmedReviewer = decidedBy.trim()
-    if (!trimmedReviewer) {
-      setSubmitError("Reviewer name is required.")
-      return
-    }
-
-    const body = {
-      reviewer_notes: notes.trim() || null,
-      decided_by: trimmedReviewer,
-    }
-    const mut = dialog.type === "approve" ? approveMut : rejectMut
 
     let succeeded = 0
     let failed = 0
     let lastErrorMessage: string | null = null
+
     for (const reconciliationId of ids) {
       try {
-        await mut.mutateAsync({ reconciliationId, body })
+        if (dialog.type === "approve") {
+          await approveMut.mutateAsync({
+            reconciliationId,
+            body: {
+              reviewer_notes: notes || undefined,
+              decided_by: decidedBy || "admin",
+            },
+          })
+        } else {
+          await rejectMut.mutateAsync({
+            reconciliationId,
+            body: {
+              reviewer_notes: notes || undefined,
+              decided_by: decidedBy || "admin",
+            },
+          })
+        }
         succeeded++
       } catch (e: unknown) {
         failed++
-        if (e instanceof Error) lastErrorMessage = e.message
+        const msg =
+          e instanceof Error
+            ? e.message
+            : `Failed to ${dialog.type} exception`
+        lastErrorMessage = msg
       }
     }
 
@@ -182,10 +181,6 @@ export function ExceptionsPage() {
       )
     }
 
-    // If EVERY action failed, keep selection + dialog open so the user
-    // can inspect the error and retry without re-doing the whole
-    // selection (bug H4). Partial failure still closes since the
-    // remaining items are no longer in pending_review state.
     if (failed > 0 && succeeded === 0) {
       setSubmitError(
         lastErrorMessage ??
@@ -243,23 +238,22 @@ export function ExceptionsPage() {
         actions={
           invoices && invoices.length > 0 ? (
             <div className="flex items-center gap-2">
-              {/* Plain Button -- previously this nested a <Checkbox>
-                  inside a <button>, which is invalid HTML and confusing
-                  for assistive tech. The check icon is now decorative. */}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={toggleAll}
-                className="gap-2"
-                aria-pressed={allSelected}
-              >
-                {allSelected ? (
-                  <CheckCircle2 className="size-4" />
-                ) : (
-                  <CircleDashed className="size-4" />
-                )}
-                {allSelected ? "Deselect all" : "Select all"}
-              </Button>
+              {canWrite && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={toggleAll}
+                  className="gap-2"
+                  aria-pressed={allSelected}
+                >
+                  {allSelected ? (
+                    <CheckCircle2 className="size-4" />
+                  ) : (
+                    <CircleDashed className="size-4" />
+                  )}
+                  {allSelected ? "Deselect all" : "Select all"}
+                </Button>
+              )}
               <ExportButton
                 data={invoices}
                 columns={EXCEPTION_COLUMNS}
@@ -357,6 +351,7 @@ export function ExceptionsPage() {
               onToggle={() => toggleSelect(inv.id)}
               onAction={openSingle}
               onReconLoaded={(reconId) => registerRecon(inv.id, reconId)}
+              canWrite={canWrite}
             />
           ))}
         </div>
@@ -378,63 +373,54 @@ export function ExceptionsPage() {
             <DialogDescription>
               {dialogIsBulk
                 ? "Your note and reviewer name will be applied to every selected invoice."
-                : "Add an optional note explaining your decision. This will be stored for audit."}
+                : "Your note and reviewer name will be recorded on this reconciliation."}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label htmlFor="decided-by">
-                Reviewer <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="decided-by"
-                placeholder="your name"
-                value={decidedBy}
-                onChange={(e) => setDecidedBy(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="notes">Notes</Label>
-              <Textarea
-                id="notes"
-                placeholder={
-                  dialog.open && dialog.type === "approve"
-                    ? "e.g., Price increase was pre-approved by procurement"
-                    : "e.g., Unauthorized vendor change"
-                }
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={4}
-              />
-            </div>
             {submitError && (
-              <div
-                role="alert"
-                className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-              >
+              <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
                 {submitError}
               </div>
             )}
+            <div className="space-y-2">
+              <Label htmlFor="reviewer">Reviewer name</Label>
+              <Input
+                id="reviewer"
+                value={decidedBy}
+                onChange={(e) => setDecidedBy(e.target.value)}
+                placeholder="Your name or role"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="notes">Notes (optional)</Label>
+              <Textarea
+                id="notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder={
+                  dialog.open && dialog.type === "approve"
+                    ? "Reason for manual approval..."
+                    : "Reason for rejection..."
+                }
+                rows={3}
+              />
+            </div>
           </div>
 
           <DialogFooter>
-            <Button variant="ghost" onClick={closeDialog}>
+            <Button variant="outline" onClick={closeDialog}>
               Cancel
             </Button>
             <Button
-              onClick={submit}
               variant={
-                dialog.open && dialog.type === "reject" ? "destructive" : "default"
+                dialog.open && dialog.type === "approve"
+                  ? "default"
+                  : "destructive"
               }
+              onClick={handleSubmit}
               disabled={approveMut.isPending || rejectMut.isPending}
             >
-              {dialog.open && dialog.type === "approve" ? (
-                <CheckCircle2 className="size-4" />
-              ) : (
-                <XCircle className="size-4" />
-              )}
               {dialog.open && dialog.type === "approve"
                 ? `Approve${dialogIsBulk ? ` ${dialogIds.length}` : ""}`
                 : `Reject${dialogIsBulk ? ` ${dialogIds.length}` : ""}`}
@@ -453,6 +439,7 @@ interface ExceptionCardProps {
   onToggle: () => void
   onAction: (type: ActionType, reconciliationId: string) => void
   onReconLoaded: (reconciliationId: string) => void
+  canWrite?: boolean
 }
 
 function ExceptionCard({
@@ -462,6 +449,7 @@ function ExceptionCard({
   onToggle,
   onAction,
   onReconLoaded,
+  canWrite = true,
 }: ExceptionCardProps) {
   const { data: recon } = useReconciliationByInvoice(invoice.id)
 
@@ -485,11 +473,13 @@ function ExceptionCard({
           {/* Header */}
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3 min-w-0">
-              <Checkbox
-                checked={checked}
-                onCheckedChange={onToggle}
-                className="mt-1.5"
-              />
+              {canWrite && (
+                <Checkbox
+                  checked={checked}
+                  onCheckedChange={onToggle}
+                  className="mt-1.5"
+                />
+              )}
               <div className="size-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
                 <AlertTriangle className="size-5 text-amber-500" />
               </div>
@@ -554,7 +544,7 @@ function ExceptionCard({
           )}
 
           {/* Actions */}
-          {recon && (
+          {canWrite && recon && (
             <div className="flex items-center gap-2 pt-1">
               <Button
                 variant="default"

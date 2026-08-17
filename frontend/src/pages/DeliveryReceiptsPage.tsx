@@ -19,6 +19,8 @@ import {
 } from "@/api/delivery-receipts"
 import { usePurchaseOrders } from "@/api/purchase-orders"
 import { useReceiptSheet } from "@/store/receipt"
+import { useAuthStore } from "@/store/auth"
+import { AUTH_ENABLED } from "@/lib/firebase"
 import { formatDate } from "@/lib/format"
 import type { CsvColumn } from "@/lib/csv"
 import type { DeliveryReceipt } from "@/api/types"
@@ -45,6 +47,7 @@ export function DeliveryReceiptsPage() {
   const { data: pos } = usePurchaseOrders()
   const openSheet = useReceiptSheet((s) => s.open)
   const importMutation = useImportReceiptsCsv()
+  const canWrite = useAuthStore((s) => !AUTH_ENABLED || Boolean(s.firebaseUser))
 
   const poNumberById = useMemo(() => {
     const map = new Map<string, string>()
@@ -86,25 +89,29 @@ export function DeliveryReceiptsPage() {
         description="Goods-received records the matcher uses for three-way reconciliation against purchase orders and invoices. Import a CSV or Excel file, or enter receipts directly."
         actions={
           <>
-            <ImportButton
-              entity="delivery receipts"
-              templateUrl="/samples/delivery-receipts-template.csv"
-              importMutation={importMutation}
-            />
+            {canWrite && (
+              <ImportButton
+                entity="delivery receipts"
+                templateUrl="/samples/delivery-receipts-template.csv"
+                importMutation={importMutation}
+              />
+            )}
             <ExportButton
               data={data}
               columns={columns}
               filenamePrefix="delivery-receipts"
             />
-            <Button size="sm" className="gap-1.5" onClick={() => setFormOpen(true)}>
-              <Plus className="size-4" />
-              New receipt
-            </Button>
+            {canWrite && (
+              <Button size="sm" className="gap-1.5" onClick={() => setFormOpen(true)}>
+                <Plus className="size-4" />
+                New receipt
+              </Button>
+            )}
           </>
         }
       />
 
-      <ReceiptForm open={formOpen} onOpenChange={setFormOpen} />
+      {canWrite && <ReceiptForm open={formOpen} onOpenChange={setFormOpen} />}
 
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />

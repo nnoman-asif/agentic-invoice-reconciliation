@@ -16,6 +16,8 @@ import { ImportButton } from "@/components/shared/ImportButton"
 import { POForm } from "@/components/po/POForm"
 import { useImportPOsCsv, usePurchaseOrders } from "@/api/purchase-orders"
 import { usePOSheet } from "@/store/po"
+import { useAuthStore } from "@/store/auth"
+import { AUTH_ENABLED } from "@/lib/firebase"
 import { formatCurrency, formatDate } from "@/lib/format"
 import type { CsvColumn } from "@/lib/csv"
 import type { PurchaseOrderListItem } from "@/api/types"
@@ -37,6 +39,7 @@ export function PurchaseOrdersPage() {
   const { data, isLoading } = usePurchaseOrders()
   const openSheet = usePOSheet((s) => s.open)
   const importMutation = useImportPOsCsv()
+  const canWrite = useAuthStore((s) => !AUTH_ENABLED || Boolean(s.firebaseUser))
 
   const filtered = data?.filter((po) => {
     if (!search) return true
@@ -55,25 +58,29 @@ export function PurchaseOrdersPage() {
         description="Reference data the matcher agent uses to reconcile incoming invoices. In production these typically sync from your ERP; here you can seed sample data, import via CSV, or manage them directly."
         actions={
           <>
-            <ImportButton
-              entity="purchase orders"
-              templateUrl="/samples/purchase-orders-template.csv"
-              importMutation={importMutation}
-            />
+            {canWrite && (
+              <ImportButton
+                entity="purchase orders"
+                templateUrl="/samples/purchase-orders-template.csv"
+                importMutation={importMutation}
+              />
+            )}
             <ExportButton
               data={data}
               columns={PO_COLUMNS}
               filenamePrefix="purchase-orders"
             />
-            <Button size="sm" className="gap-1.5" onClick={() => setFormOpen(true)}>
-              <Plus className="size-4" />
-              New PO
-            </Button>
+            {canWrite && (
+              <Button size="sm" className="gap-1.5" onClick={() => setFormOpen(true)}>
+                <Plus className="size-4" />
+                New PO
+              </Button>
+            )}
           </>
         }
       />
 
-      <POForm open={formOpen} onOpenChange={setFormOpen} />
+      {canWrite && <POForm open={formOpen} onOpenChange={setFormOpen} />}
 
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />

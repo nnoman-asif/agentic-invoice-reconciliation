@@ -45,6 +45,8 @@ import {
   useVendorStats,
 } from "@/api/vendors"
 import { useVendorSheet } from "@/store/vendor"
+import { useAuthStore } from "@/store/auth"
+import { AUTH_ENABLED } from "@/lib/firebase"
 import {
   formatCurrency,
   formatDate,
@@ -66,6 +68,7 @@ export function VendorSheet() {
   const vendorId = useVendorSheet((s) => s.vendorId)
   const close = useVendorSheet((s) => s.close)
   const open = !!vendorId
+  const canWrite = useAuthStore((s) => !AUTH_ENABLED || Boolean(s.firebaseUser))
 
   const { data: vendor } = useVendor(vendorId)
   const { data: pos } = useVendorPOs(vendorId)
@@ -135,7 +138,7 @@ export function VendorSheet() {
                     <code className="text-xs font-mono">{vendor.code}</code>
                   </SheetDescription>
                 </div>
-                {vendor && !vendor.is_system && (
+                {vendor && !vendor.is_system && canWrite && (
                 <Button
                   variant="ghost"
                   size="icon"
@@ -167,29 +170,25 @@ export function VendorSheet() {
                   />
                 )}
               </div>
+
+              {/* Stats overview */}
+              <div className="grid grid-cols-3 divide-x divide-border/60 border-y border-border/60 -mx-6 px-0 mt-3">
+                <Stat
+                  label="Invoices"
+                  value={String(stats?.invoice_count ?? invoices?.length ?? 0)}
+                />
+                <Stat
+                  label="POs"
+                  value={String(stats?.po_count ?? pos?.length ?? 0)}
+                />
+                <Stat
+                  label="Approved"
+                  value={String(stats?.approved_count ?? 0)}
+                />
+              </div>
             </>
           )}
         </SheetHeader>
-
-        {stats && (
-          <div className="grid grid-cols-3 divide-x divide-border/60 border-b border-border/60">
-            <Stat
-              label="Purchase Orders"
-              value={stats.po_count.toString()}
-              sub={formatCurrency(stats.po_total)}
-            />
-            <Stat
-              label="Invoices"
-              value={stats.invoice_count.toString()}
-              sub={formatCurrency(stats.invoice_total)}
-            />
-            <Stat
-              label="Avg Time"
-              value={formatDuration(stats.avg_processing_time_ms)}
-              sub={`${stats.approved_count} approved`}
-            />
-          </div>
-        )}
 
         <Tabs defaultValue="invoices" className="flex-1 overflow-hidden flex flex-col">
           <TabsList className="mx-6 mt-4 self-start">
@@ -289,7 +288,7 @@ export function VendorSheet() {
           </TabsContent>
         </Tabs>
 
-        {vendor && !vendor.is_system && (
+        {vendor && !vendor.is_system && canWrite && (
           <SheetFooter className="border-t border-border/60 px-6 py-3 mt-0">
             <Button
               variant="outline"
@@ -307,7 +306,7 @@ export function VendorSheet() {
         )}
       </SheetContent>
 
-      {vendor && (
+      {vendor && canWrite && (
         <>
           <VendorForm
             open={editOpen}

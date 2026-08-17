@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react"
 
 import { useInvoices } from "@/api/invoices"
 import { useUIStore } from "@/store/ui"
+import { useAuthStore } from "@/store/auth"
 import type { BusinessStatus, ProcessingStatus } from "@/api/types"
 
 interface SnapshotEntry {
@@ -24,8 +25,18 @@ const FRESH_UPLOAD_WINDOW_MS = 60_000
 export function useInvoiceNotifications() {
   const { data: invoices } = useInvoices()
   const addNotification = useUIStore((s) => s.addNotification)
+  const userKey = useAuthStore((s) => s.firebaseUser?.uid ?? s.guestToken ?? "anon")
+  const prevUserKey = useRef(userKey)
   const snapshot = useRef<Map<string, SnapshotEntry>>(new Map())
   const seeded = useRef(false)
+
+  useEffect(() => {
+    if (prevUserKey.current !== userKey) {
+      prevUserKey.current = userKey
+      snapshot.current.clear()
+      seeded.current = false
+    }
+  }, [userKey])
 
   useEffect(() => {
     if (!invoices) return

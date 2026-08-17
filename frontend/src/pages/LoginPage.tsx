@@ -26,6 +26,7 @@ export function LoginPage() {
   const signInWithEmail = useAuthStore((s) => s.signInWithEmail)
   const registerWithEmail = useAuthStore((s) => s.registerWithEmail)
   const me = useAuthStore((s) => s.me)
+  const firebaseUser = useAuthStore((s) => s.firebaseUser)
 
   const [mode, setMode] = useState<"signin" | "register" | "forgot">("signin")
   const [name, setName] = useState("")
@@ -33,7 +34,8 @@ export function LoginPage() {
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
-  const [busy, setBusy] = useState(false)
+  const [oauthLoading, setOauthLoading] = useState<"google" | "github" | null>(null)
+  const [submitting, setSubmitting] = useState(false)
 
   // Live password matching state
   const passwordMatchError = mode === "register" && confirmPassword.length > 0 && password !== confirmPassword 
@@ -71,15 +73,16 @@ export function LoginPage() {
   }, [lockoutUntil])
 
   const isLockedOut = lockoutUntil !== null && lockoutUntil > Date.now()
-  const formDisabled = busy || isLockedOut
+  const formDisabled = Boolean(oauthLoading) || submitting || isLockedOut
   const resetPassword = useAuthStore((s) => s.resetPassword)
 
-  // Wait for the auth state to actually populate before redirecting
+  // Wait for the real authenticated auth state to populate before redirecting.
+  // Guests (firebaseUser === null) are allowed to view the login page so they can sign in.
   useEffect(() => {
-    if (me) {
+    if (firebaseUser || (!AUTH_ENABLED && me)) {
       navigate(from, { replace: true })
     }
-  }, [me, navigate, from])
+  }, [firebaseUser, me, navigate, from])
 
   const mapAuthError = (err: any): string => {
     const code = err?.code || ""
@@ -101,8 +104,44 @@ export function LoginPage() {
     return "Authentication failed"
   }
 
-  const run = async (fn: () => Promise<void>) => {
-    setBusy(true)
+  const handleGoogleSignIn = async () => {
+    if (formDisabled) return
+    setOauthLoading("google")
+    try {
+      await signInWithGoogle()
+    } catch (err: any) {
+      const code = err?.code || ""
+      if (code !== "auth/popup-closed-by-user" && code !== "auth/cancelled-popup-request") {
+        const msg = mapAuthError(err)
+        if (msg !== "CANCELLED") {
+          toast.error(msg)
+        }
+      }
+    } finally {
+      setOauthLoading(null)
+    }
+  }
+
+  const handleGitHubSignIn = async () => {
+    if (formDisabled) return
+    setOauthLoading("github")
+    try {
+      await signInWithGitHub()
+    } catch (err: any) {
+      const code = err?.code || ""
+      if (code !== "auth/popup-closed-by-user" && code !== "auth/cancelled-popup-request") {
+        const msg = mapAuthError(err)
+        if (msg !== "CANCELLED") {
+          toast.error(msg)
+        }
+      }
+    } finally {
+      setOauthLoading(null)
+    }
+  }
+
+  const runEmailAuth = async (fn: () => Promise<void>) => {
+    setSubmitting(true)
     try {
       await fn()
       // Success means reset
@@ -110,10 +149,7 @@ export function LoginPage() {
         setFailedAttempts(0)
         localStorage.removeItem('ira_failed_attempts')
       }
-      // Do not setBusy(false) here. We rely on useEffect to navigate away once `me` is loaded.
-      // This prevents the user from clicking multiple times while `fetchMe` is running in the background.
     } catch (err) {
-      setBusy(false)
       const msg = mapAuthError(err)
       if (msg !== "CANCELLED") {
         toast.error(msg)
@@ -129,6 +165,8 @@ export function LoginPage() {
            }
         }
       }
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -157,11 +195,10 @@ export function LoginPage() {
     setErrors({})
 
     if (mode === "forgot") {
-      void run(async () => {
+      void runEmailAuth(async () => {
         await resetPassword(email.trim())
         toast.success("Password reset email sent. Please check your inbox.")
         setMode("signin")
-        setBusy(false)
       })
       return
     }
@@ -171,9 +208,9 @@ export function LoginPage() {
     }
 
     if (mode === "signin") {
-      void run(() => signInWithEmail(email.trim(), password))
+      void runEmailAuth(() => signInWithEmail(email.trim(), password))
     } else {
-      void run(() => registerWithEmail(name.trim(), email.trim(), password))
+      void runEmailAuth(() => registerWithEmail(name.trim(), email.trim(), password))
     }
   }
 
@@ -197,6 +234,16 @@ export function LoginPage() {
     )
   }
 
+  const handleClose = () => {
+    if (location.state?.from) {
+      navigate(location.state.from)
+    } else if (window.history.length > 1) {
+      navigate(-1)
+    } else {
+      navigate(ROUTES.dashboard)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">
       <div className="fixed inset-0 gradient-mesh pointer-events-none" />
@@ -213,13 +260,12 @@ export function LoginPage() {
           <Button
             variant="ghost"
             size="icon"
-            asChild
+            type="button"
+            onClick={handleClose}
             className="size-11 rounded-full bg-white/70 hover:bg-blue-50 border-2 border-white hover:border-blue-200 shadow-[0_4px_20px_rgba(0,0,0,0.08)] hover:shadow-[0_4px_20px_rgba(37,99,235,0.2)] backdrop-blur-xl text-muted-foreground hover:text-blue-600 transition-all duration-300 flex items-center justify-center group"
           >
-            <Link to={ROUTES.landing}>
-              <X className="size-5 stroke-[2.5] group-hover:scale-110 transition-transform duration-300" />
-              <span className="sr-only">Close</span>
-            </Link>
+            <X className="size-5 stroke-[2.5] group-hover:scale-110 transition-transform duration-300" />
+            <span className="sr-only">Close</span>
           </Button>
         </MagneticButton>
       </div>
@@ -271,9 +317,13 @@ export function LoginPage() {
                         variant="outline"
                         className="w-full h-11"
                         disabled={formDisabled}
-                        onClick={() => void run(() => signInWithGoogle())}
+                        onClick={() => void handleGoogleSignIn()}
                       >
-                        <GoogleGlyph className="size-4 mr-2" />
+                        {oauthLoading === "google" ? (
+                          <Loader2 className="size-4 mr-2 animate-spin" />
+                        ) : (
+                          <GoogleGlyph className="size-4 mr-2" />
+                        )}
                         Continue with Google
                       </Button>
                     </MagneticButton>
@@ -283,9 +333,13 @@ export function LoginPage() {
                         variant="outline"
                         className="w-full h-11"
                         disabled={formDisabled}
-                        onClick={() => void run(() => signInWithGitHub())}
+                        onClick={() => void handleGitHubSignIn()}
                       >
-                        <Github className="size-4 mr-2" />
+                        {oauthLoading === "github" ? (
+                          <Loader2 className="size-4 mr-2 animate-spin" />
+                        ) : (
+                          <Github className="size-4 mr-2" />
+                        )}
                         Continue with GitHub
                       </Button>
                     </MagneticButton>
@@ -447,7 +501,7 @@ export function LoginPage() {
               <div className="pt-2">
                 <MagneticButton className="w-full">
                   <Button type="submit" className="w-full h-11" disabled={formDisabled}>
-                    {busy ? (
+                    {submitting ? (
                       <Loader2 className="size-4 animate-spin" />
                     ) : isLockedOut ? (
                       `Locked out (${lockoutRemaining}s)`

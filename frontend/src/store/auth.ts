@@ -12,7 +12,8 @@ import {
 import { toast } from "sonner"
 
 import { deleteMe, fetchMe, mintGuest, type AuthMe } from "@/api/auth"
-import { bindAuthInterceptors } from "@/api/client"
+import { bindAuthInterceptors, queryClient } from "@/api/client"
+import { useUIStore } from "@/store/ui"
 import {
   AUTH_ENABLED,
   getFirebaseAuth,
@@ -51,6 +52,60 @@ async function syncIdToken(user: User | null): Promise<string | null> {
   return user.getIdToken()
 }
 
+/**
+ * Custom wrapper around signInWithPopup that races Firebase's SDK against a
+ * 100ms popupWindow.closed watcher.
+ *
+ * Firebase's built-in SDK has a 15-20 second polling timeout before detecting
+ * that a user closed an OAuth popup window. By intercepting window.open to grab
+ * the popup handle directly, we detect window closure within 100ms while keeping
+ * the loading state active as long as the popup window remains open.
+ */
+async function signInWithPopupFast(
+  auth: ReturnType<typeof getFirebaseAuth>,
+  provider: import("firebase/auth").AuthProvider
+) {
+  let popupWindow: Window | null = null
+  const originalOpen = window.open
+
+  try {
+    // Intercept window.open temporarily to capture the popup window handle
+    window.open = function (...args: any[]) {
+      // @ts-expect-error - pass through args to native window.open
+      popupWindow = originalOpen.apply(window, args)
+      return popupWindow
+    }
+
+    let pollInterval: ReturnType<typeof setInterval> | null = null
+
+    const popupClosedPromise = new Promise<never>((_, reject) => {
+      pollInterval = setInterval(() => {
+        try {
+          if (popupWindow && popupWindow.closed) {
+            reject({
+              code: "auth/popup-closed-by-user",
+              message: "The popup was closed by the user.",
+            })
+          }
+        } catch {
+          // Cross-origin checks don't block .closed property, but guard just in case
+        }
+      }, 100)
+    })
+
+    try {
+      return await Promise.race([
+        signInWithPopup(auth, provider),
+        popupClosedPromise,
+      ])
+    } finally {
+      if (pollInterval) clearInterval(pollInterval)
+    }
+  } finally {
+    window.open = originalOpen
+  }
+}
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   ready: !AUTH_ENABLED,
   firebaseUser: null,
@@ -72,7 +127,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const idToken = await syncIdToken(user)
       if (user && idToken) {
         // Signed-in users supersede guest identity.
+        const prevGuest = get().guestToken
+        const prevUser = get().firebaseUser
         localStorage.removeItem(GUEST_TOKEN_KEY)
+
+        // If newly signing in or switching accounts, clear stale demo/prior notifications & query cache
+        if (prevGuest || !prevUser || prevUser.uid !== user.uid) {
+          useUIStore.getState().clearNotifications()
+          queryClient.clear()
+        }
+
         set({
           firebaseUser: user,
           idToken,
@@ -86,6 +150,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           set({ me: null })
         }
         return
+      }
+
+      // Transitioned to unauthenticated state
+      if (get().firebaseUser) {
+        useUIStore.getState().clearNotifications()
+        queryClient.clear()
       }
 
       const guestToken = localStorage.getItem(GUEST_TOKEN_KEY)
@@ -140,12 +210,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   signInWithGoogle: async () => {
     const auth = getFirebaseAuth()
-    await signInWithPopup(auth, googleProvider)
+    await signInWithPopupFast(auth, googleProvider)
   },
 
   signInWithGitHub: async () => {
     const auth = getFirebaseAuth()
-    await signInWithPopup(auth, githubProvider)
+    await signInWithPopupFast(auth, githubProvider)
   },
 
   signInWithEmail: async (email, password) => {
@@ -173,6 +243,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await firebaseSignOut(getFirebaseAuth())
     }
     localStorage.removeItem(GUEST_TOKEN_KEY)
+    useUIStore.getState().clearNotifications()
+    queryClient.clear()
     set({
       firebaseUser: null,
       idToken: null,
@@ -192,6 +264,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await firebaseSignOut(getFirebaseAuth()).catch(() => undefined)
     }
     localStorage.removeItem(GUEST_TOKEN_KEY)
+    useUIStore.getState().clearNotifications()
+    queryClient.clear()
     set({
       firebaseUser: null,
       idToken: null,

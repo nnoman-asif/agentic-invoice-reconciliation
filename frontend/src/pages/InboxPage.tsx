@@ -9,6 +9,8 @@ import { ExportButton } from "@/components/shared/ExportButton"
 import { TableSkeleton } from "@/components/shared/LoadingSkeleton"
 import { useInvoices } from "@/api/invoices"
 import { Button } from "@/components/ui/button"
+import { useAuthStore } from "@/store/auth"
+import { AUTH_ENABLED } from "@/lib/firebase"
 import { cn } from "@/lib/utils"
 import type { CsvColumn } from "@/lib/csv"
 import type { InvoiceListItem } from "@/api/types"
@@ -32,7 +34,8 @@ const FILTERS = [
 
 export function InboxPage() {
   const [filter, setFilter] = useState("")
-  const { data: invoices, isLoading } = useInvoices()
+  const { data: invoices, isLoading, refetch } = useInvoices()
+  const canWrite = useAuthStore((s) => !AUTH_ENABLED || Boolean(s.firebaseUser))
 
   const filtered = filter
     ? invoices?.filter((inv) => filter.split(",").includes(inv.processing_status))
@@ -52,7 +55,7 @@ export function InboxPage() {
         }
       />
 
-      <InvoiceUploadZone />
+      {canWrite && <InvoiceUploadZone />}
 
       <div className="space-y-4">
         <div className="flex items-center justify-between">

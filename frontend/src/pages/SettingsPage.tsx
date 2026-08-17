@@ -68,8 +68,8 @@ export function SettingsPage() {
   const refreshMe = useAuthStore((s) => s.refreshMe)
   const signOut = useAuthStore((s) => s.signOut)
   const deleteAccount = useAuthStore((s) => s.deleteAccount)
-  const isGuest = useAuthStore((s) => s.isGuest)
-  const isSignedIn = useAuthStore((s) => s.isSignedIn)
+  const isGuest = useAuthStore((s) => Boolean(s.guestToken) && !s.firebaseUser)
+  const isSignedIn = useAuthStore((s) => !AUTH_ENABLED || Boolean(s.firebaseUser))
   const [deleting, setDeleting] = useState(false)
   const [requestedLimit, setRequestedLimit] = useState("")
   const [requestReason, setRequestReason] = useState("")
@@ -191,6 +191,23 @@ export function SettingsPage() {
                   matching backend <code className="text-xs">AUTH_ENABLED</code>{" "}
                   to use profiles.
                 </p>
+              ) : isGuest ? (
+                <div className="space-y-4">
+                  <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-2">
+                    <div className="font-semibold text-foreground flex items-center gap-2">
+                      <span className="size-2 rounded-full bg-blue-500 animate-pulse" />
+                      Guest Demo Session
+                    </div>
+                    <p className="text-muted-foreground text-sm leading-relaxed">
+                      You are using a temporary guest session with 3 sample invoice reconciliations per day. No personal account or stored data is associated with this session.
+                    </p>
+                  </div>
+                  <div className="pt-2">
+                    <Button onClick={() => navigate(ROUTES.login)}>
+                      Sign in or Create an Account
+                    </Button>
+                  </div>
+                </div>
               ) : !me ? (
                 <p className="text-muted-foreground">
                   No session loaded.{" "}
@@ -244,18 +261,16 @@ export function SettingsPage() {
                   </dl>
 
                   <div className="flex flex-wrap gap-2 pt-2">
-                    {(isSignedIn() || isGuest()) && (
-                      <Button
-                        variant="outline"
-                        onClick={() =>
-                          void signOut().then(() =>
-                            navigate(ROUTES.landing, { replace: true })
-                          )
-                        }
-                      >
-                        Sign out
-                      </Button>
-                    )}
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        void signOut().then(() =>
+                          navigate(ROUTES.landing, { replace: true })
+                        )
+                      }
+                    >
+                      Sign out
+                    </Button>
 
                     <AlertDialog>
                       <AlertDialogTrigger asChild>

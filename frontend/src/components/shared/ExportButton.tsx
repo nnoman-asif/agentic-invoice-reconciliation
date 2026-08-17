@@ -11,6 +11,8 @@ import {
   timestampedFilename,
   type CsvColumn,
 } from "@/lib/csv"
+import { useAuthStore } from "@/store/auth"
+import { AUTH_ENABLED } from "@/lib/firebase"
 import { toast } from "sonner"
 
 interface Props<T> {
@@ -28,6 +30,12 @@ export function ExportButton<T>({
   label = "Export CSV",
   size = "sm",
 }: Props<T>) {
+  const canWrite = useAuthStore((s) => !AUTH_ENABLED || Boolean(s.firebaseUser))
+
+  if (!canWrite) {
+    return null
+  }
+
   const disabled = !data || data.length === 0
 
   const handle = () => {

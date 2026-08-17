@@ -1,58 +1,39 @@
 import { useEffect } from "react"
-import { Navigate, Outlet, useLocation } from "react-router-dom"
+import { Outlet } from "react-router-dom"
 
 import { AUTH_ENABLED } from "@/lib/firebase"
-import { ROUTES } from "@/lib/routes"
 import { useAuthStore } from "@/store/auth"
-
-/** Pages that require a signed-in (non-guest) account when auth is on. */
-const WRITE_PATHS = [
-  ROUTES.vendors,
-  ROUTES.purchaseOrders,
-  ROUTES.deliveryReceipts,
-] as const
-
-function isWritePath(pathname: string): boolean {
-  return WRITE_PATHS.some(
-    (p) => pathname === p || pathname.startsWith(`${p}/`)
-  )
-}
 
 /**
  * Gate for AppShell routes.
  *
  * - Auth off: always allow (local-dev backend).
- * - Auth on: Firebase user or guest token required; guests are redirected
- *   away from write-oriented pages (vendors / POs / receipts).
+ * - Auth on: Firebase user or guest token required; automatically mints a guest
+ *   token for new visitors so demo mode is immediately accessible.
  */
 export function RequireAuth() {
-  const location = useLocation()
   const ready = useAuthStore((s) => s.ready)
   const firebaseUser = useAuthStore((s) => s.firebaseUser)
   const guestToken = useAuthStore((s) => s.guestToken)
+  const ensureGuest = useAuthStore((s) => s.ensureGuest)
+
+  useEffect(() => {
+    if (AUTH_ENABLED && ready && !firebaseUser && !guestToken) {
+      void ensureGuest()
+    }
+  }, [ready, firebaseUser, guestToken, ensureGuest])
 
   if (!AUTH_ENABLED) {
     return <Outlet />
   }
 
-  if (!ready) {
+  if (!ready || (!firebaseUser && !guestToken)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="size-8 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
       </div>
     )
   }
-
-  if (!firebaseUser && !guestToken) {
-    return (
-      <Navigate
-        to={ROUTES.login}
-        replace
-        state={{ from: location.pathname }}
-      />
-    )
-  }
-
 
   return <Outlet />
 }

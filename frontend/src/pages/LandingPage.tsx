@@ -16,6 +16,9 @@ import {
 import { GITHUB_URL } from "@/lib/config"
 import { ROUTES } from "@/lib/routes"
 
+import { useAuthStore } from "@/store/auth"
+import { AUTH_ENABLED } from "@/lib/firebase"
+
 interface Feature {
   variant: FeatureVariant
   title: string
@@ -58,13 +61,14 @@ const FEATURES: Feature[] = [
 export function LandingPage() {
   const navigate = useNavigate()
   const [pickerOpen, setPickerOpen] = useState(false)
+  const isSignedIn = useAuthStore((s) => !AUTH_ENABLED || Boolean(s.firebaseUser))
 
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">
       <ScenarioPicker
         open={pickerOpen}
         onOpenChange={setPickerOpen}
-        onStarted={() => navigate(ROUTES.inbox)}
+        onStarted={() => navigate(ROUTES.dashboard)}
       />
       {/* Background mesh */}
       <div className="fixed inset-0 gradient-mesh pointer-events-none" />
@@ -77,15 +81,23 @@ export function LandingPage() {
             <span className="font-semibold">Reconciliation</span>
           </div>
           <nav className="flex items-center gap-4">
-
-            <MagneticButton>
-              <Button asChild size="sm">
-                <Link to={ROUTES.dashboard}>
+            {isSignedIn ? (
+              <MagneticButton>
+                <Button size="sm" onClick={() => navigate(ROUTES.dashboard)}>
                   Open dashboard
                   <ArrowRight className="size-3.5" />
-                </Link>
-              </Button>
-            </MagneticButton>
+                </Button>
+              </MagneticButton>
+            ) : (
+              <MagneticButton>
+                <Button size="sm" asChild>
+                  <Link to={ROUTES.login} state={{ from: ROUTES.landing }}>
+                    Sign in / Register
+                    <ArrowRight className="size-3.5" />
+                  </Link>
+                </Button>
+              </MagneticButton>
+            )}
           </nav>
         </div>
       </header>
@@ -113,11 +125,9 @@ export function LandingPage() {
           </p>
           <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
             <MagneticButton>
-              <Button size="lg" asChild>
-                <Link to={ROUTES.dashboard}>
-                  Launch dashboard
-                  <ArrowRight className="size-4" />
-                </Link>
+              <Button size="lg" onClick={() => navigate(ROUTES.dashboard)}>
+                Launch dashboard
+                <ArrowRight className="size-4" />
               </Button>
             </MagneticButton>
             <MagneticButton>
@@ -131,8 +141,12 @@ export function LandingPage() {
               </Button>
             </MagneticButton>
             <MagneticButton>
-              <Button size="lg" variant="ghost" asChild>
-                <Link to={ROUTES.flow}>See 3D flow</Link>
+              <Button
+                size="lg"
+                variant="ghost"
+                onClick={() => navigate(ROUTES.flow)}
+              >
+                See 3D flow
               </Button>
             </MagneticButton>
           </div>
@@ -202,11 +216,9 @@ export function LandingPage() {
               Upload an invoice and watch the agents work.
             </p>
             <MagneticButton className="mt-8">
-              <Button size="lg" asChild>
-                <Link to={ROUTES.inbox}>
-                  Open the inbox
-                  <ArrowRight className="size-4" />
-                </Link>
+              <Button size="lg" onClick={() => navigate(ROUTES.inbox)}>
+                Open the inbox
+                <ArrowRight className="size-4" />
               </Button>
             </MagneticButton>
           </div>

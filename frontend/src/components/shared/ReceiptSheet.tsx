@@ -40,6 +40,8 @@ import {
 import { usePurchaseOrder } from "@/api/purchase-orders"
 import { useReceiptSheet } from "@/store/receipt"
 import { usePOSheet } from "@/store/po"
+import { useAuthStore } from "@/store/auth"
+import { AUTH_ENABLED } from "@/lib/firebase"
 import { formatDate, formatRelative } from "@/lib/format"
 
 interface DeleteErrorDetail {
@@ -67,6 +69,7 @@ export function ReceiptSheet() {
   const close = useReceiptSheet((s) => s.close)
   const openPO = usePOSheet((s) => s.open)
   const open = !!receiptId
+  const canWrite = useAuthStore((s) => !AUTH_ENABLED || Boolean(s.firebaseUser))
 
   const { data: receipt } = useDeliveryReceipt(receiptId)
   const { data: po } = usePurchaseOrder(receipt?.po_id ?? null)
@@ -140,7 +143,7 @@ export function ReceiptSheet() {
                     </span>
                   </SheetDescription>
                 </div>
-                {receipt && !receipt.is_system && (
+                {receipt && !receipt.is_system && canWrite && (
                 <Button
                   variant="ghost"
                   size="icon"
@@ -160,27 +163,30 @@ export function ReceiptSheet() {
                 />
                 <Stat
                   label="Receiver"
-                  value={receipt.receiver_name || "—"}
+                  value={receipt.receiver_name ?? "—"}
                 />
-                <Stat
-                  label="Received"
-                  value={formatRelative(receipt.received_date)}
-                />
+                <Stat label="Status" value={receipt.status} />
               </div>
 
-              {po && (
-                <button
-                  type="button"
-                  onClick={() => openPO(po.id)}
-                  className="flex items-center gap-2 text-sm text-left hover:text-primary transition-colors"
-                >
-                  <ShoppingCart className="size-3.5 text-muted-foreground" />
-                  <span className="font-mono">{po.po_number}</span>
-                </button>
+              {receipt.po_id && (
+                <div className="text-xs text-muted-foreground flex items-center justify-between pt-1">
+                  <span>Matched to PO</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      close()
+                      openPO(receipt.po_id)
+                    }}
+                    className="font-mono text-foreground hover:text-primary transition-colors flex items-center gap-1"
+                  >
+                    <ShoppingCart className="size-3" />
+                    {po?.po_number ?? "View PO"}
+                  </button>
+                </div>
               )}
 
               {receipt.notes && (
-                <p className="text-sm text-muted-foreground italic pt-2">
+                <p className="text-sm text-muted-foreground italic pt-1">
                   {receipt.notes}
                 </p>
               )}
@@ -219,7 +225,7 @@ export function ReceiptSheet() {
           )}
         </div>
 
-        {receipt && !receipt.is_system && (
+        {receipt && !receipt.is_system && canWrite && (
           <SheetFooter className="border-t border-border/60 px-6 py-3 mt-0">
             <Button
               variant="outline"
@@ -237,7 +243,7 @@ export function ReceiptSheet() {
         )}
       </SheetContent>
 
-      {receipt && (
+      {receipt && canWrite && (
         <>
           <ReceiptForm
             open={editOpen}

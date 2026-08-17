@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 
 import {
@@ -6,6 +7,9 @@ import {
   runDemoScenario,
   type DemoScenariosResponse,
 } from "@/api/demo"
+import { invoiceKeys } from "@/api/invoices"
+import { dashboardKeys } from "@/api/dashboard"
+import { exceptionKeys } from "@/api/exceptions"
 import { useAuthStore } from "@/store/auth"
 
 interface UseDemoModeReturn {
@@ -19,6 +23,7 @@ interface UseDemoModeReturn {
  * via /api/demo/* (no client-side PDF upload).
  */
 export function useDemoMode(): UseDemoModeReturn {
+  const qc = useQueryClient()
   const setGuestToken = useAuthStore((s) => s.setGuestToken)
   const [isRunning, setIsRunning] = useState(false)
 
@@ -47,6 +52,15 @@ export function useDemoMode(): UseDemoModeReturn {
         if (result.guest_token) {
           setGuestToken(result.guest_token)
         }
+
+        // Immediately invalidate and refetch invoices, dashboard, and exceptions
+        await Promise.allSettled([
+          qc.invalidateQueries({ queryKey: invoiceKeys.all }),
+          qc.refetchQueries({ queryKey: invoiceKeys.all }),
+          qc.invalidateQueries({ queryKey: dashboardKeys.all }),
+          qc.invalidateQueries({ queryKey: exceptionKeys.all }),
+        ])
+
         toast.success("Demo started", {
           id: toastId,
           description: `${result.remaining_today} demo run(s) remaining today. Watch it in the inbox.`,
@@ -60,7 +74,7 @@ export function useDemoMode(): UseDemoModeReturn {
         setIsRunning(false)
       }
     },
-    [isRunning, setGuestToken]
+    [isRunning, qc, setGuestToken]
   )
 
   return { loadScenarios, runScenario, isRunning }

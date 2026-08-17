@@ -18,6 +18,8 @@ import {
   type Vendor,
 } from "@/api/vendors"
 import { useVendorSheet } from "@/store/vendor"
+import { useAuthStore } from "@/store/auth"
+import { AUTH_ENABLED } from "@/lib/firebase"
 import type { CsvColumn } from "@/lib/csv"
 
 const VENDOR_COLUMNS: CsvColumn<Vendor>[] = [
@@ -36,6 +38,7 @@ export function VendorsPage() {
   const { data, isLoading } = useVendors()
   const openSheet = useVendorSheet((s) => s.open)
   const importMutation = useImportVendorsCsv()
+  const canWrite = useAuthStore((s) => !AUTH_ENABLED || Boolean(s.firebaseUser))
 
   const filtered = data?.filter((v) => {
     if (!search) return true
@@ -55,25 +58,29 @@ export function VendorsPage() {
         description="The companies your invoices and purchase orders reference. The matcher agent looks vendors up by tax ID first, then by name. Vendors must exist before their POs or invoices can be reconciled."
         actions={
           <>
-            <ImportButton
-              entity="vendors"
-              templateUrl="/samples/vendors-template.csv"
-              importMutation={importMutation}
-            />
+            {canWrite && (
+              <ImportButton
+                entity="vendors"
+                templateUrl="/samples/vendors-template.csv"
+                importMutation={importMutation}
+              />
+            )}
             <ExportButton
               data={data}
               columns={VENDOR_COLUMNS}
               filenamePrefix="vendors"
             />
-            <Button size="sm" className="gap-1.5" onClick={() => setFormOpen(true)}>
-              <Plus className="size-4" />
-              New vendor
-            </Button>
+            {canWrite && (
+              <Button size="sm" className="gap-1.5" onClick={() => setFormOpen(true)}>
+                <Plus className="size-4" />
+                New vendor
+              </Button>
+            )}
           </>
         }
       />
 
-      <VendorForm open={formOpen} onOpenChange={setFormOpen} />
+      {canWrite && <VendorForm open={formOpen} onOpenChange={setFormOpen} />}
 
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />

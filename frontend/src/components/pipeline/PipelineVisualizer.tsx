@@ -42,8 +42,8 @@ export function PipelineVisualizer({ pipeline }: Props) {
       <Card className="relative overflow-hidden">
         <div className="absolute inset-0 gradient-mesh opacity-50 pointer-events-none" />
         <CardContent className="relative py-8 px-3 sm:py-12 sm:px-8">
-          <div className="overflow-x-auto -mx-3 sm:mx-0">
-            <div className="flex items-center justify-between gap-2 max-w-3xl mx-auto min-w-[440px] sm:min-w-0 px-3 sm:px-0">
+          <div className="overflow-x-auto overflow-y-hidden py-4 -mx-3 sm:mx-0">
+            <div className="flex items-center justify-between gap-2 max-w-3xl mx-auto min-w-[460px] sm:min-w-0 px-4 sm:px-2">
               {stages.map((stage, idx) => (
                 <div
                   key={stage.id}
@@ -97,7 +97,7 @@ export function PipelineVisualizer({ pipeline }: Props) {
 
           {!selectedStage && (
             <div className="mt-4 text-center text-xs text-muted-foreground">
-              Click any agent above to inspect its prompt, input, and output
+              Click any agent above to inspect its input and output
             </div>
           )}
         </CardContent>
