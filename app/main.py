@@ -17,6 +17,7 @@ from app.api.routes import (
     purchase_orders,
     quota,
     vendors,
+    feedback,
 )
 from app.api.webhooks import invoice_webhook
 from app.auth.firebase import init_firebase
@@ -61,4 +62,5 @@ app.include_router(delivery_receipts.router, prefix="/api", tags=["Delivery Rece
 app.include_router(exceptions.router, prefix="/api", tags=["Exceptions"])
 app.include_router(dashboard.router, prefix="/api", tags=["Dashboard"])
 app.include_router(vendors.router, prefix="/api", tags=["Vendors"])
+app.include_router(feedback.router, prefix="/api", tags=["Feedback"])
 app.include_router(invoice_webhook.router, prefix="/api", tags=["Webhooks"])

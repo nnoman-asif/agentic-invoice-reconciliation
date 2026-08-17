@@ -1,7 +1,19 @@
 import { useEffect, useState } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import { format } from "date-fns"
-import { Loader2, Monitor, Moon, Sun } from "lucide-react"
+import {
+  Bug,
+  CheckCircle2,
+  Lightbulb,
+  Loader2,
+  Lock,
+  MessageSquarePlus,
+  Monitor,
+  Moon,
+  Send,
+  Sun,
+  TrendingUp,
+} from "lucide-react"
 import { toast } from "sonner"
 
 import { PageHeader } from "@/components/shared/PageHeader"
@@ -30,6 +42,7 @@ import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
+import { useSubmitFeedback, type FeedbackCategory } from "@/api/feedback"
 import { useHealth } from "@/api/health"
 import { useQuota, useRequestQuotaIncrease } from "@/api/quota"
 import { useTheme } from "@/hooks/useTheme"
@@ -74,6 +87,49 @@ export function SettingsPage() {
   const [requestedLimit, setRequestedLimit] = useState("")
   const [requestReason, setRequestReason] = useState("")
   const [requestSent, setRequestSent] = useState(false)
+
+  const submitFeedbackMutation = useSubmitFeedback()
+  const [feedbackCategory, setFeedbackCategory] = useState<FeedbackCategory>("suggestion")
+  const [feedbackSubject, setFeedbackSubject] = useState("")
+  const [feedbackMessage, setFeedbackMessage] = useState("")
+  const [feedbackQuotaLimit, setFeedbackQuotaLimit] = useState("")
+  const [feedbackSuccess, setFeedbackSuccess] = useState(false)
+
+  const handleSubmitFeedback = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!feedbackSubject.trim() || !feedbackMessage.trim()) {
+      toast.error("Please enter both a subject and message.")
+      return
+    }
+    let parsedLimit: number | undefined
+    if (feedbackCategory === "quota_increase") {
+      parsedLimit = Number.parseInt(feedbackQuotaLimit, 10)
+      const curLimit = quota?.limit ?? me?.daily_invoice_limit ?? 15
+      if (!Number.isFinite(parsedLimit) || parsedLimit <= curLimit) {
+        toast.error(`Requested limit must be greater than your current daily limit (${curLimit})`)
+        return
+      }
+    }
+
+    try {
+      await submitFeedbackMutation.mutateAsync({
+        category: feedbackCategory,
+        subject: feedbackSubject.trim(),
+        message: feedbackMessage.trim(),
+        requested_limit: parsedLimit,
+      })
+      setFeedbackSuccess(true)
+      toast.success("Feedback submitted! Thank you for helping us improve.")
+    } catch (err: unknown) {
+      const errorMsg =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+          : err instanceof Error
+            ? err.message
+            : "Failed to submit feedback."
+      toast.error(errorMsg || "Failed to submit feedback.")
+    }
+  }
 
   useEffect(() => {
     if (AUTH_ENABLED && ready) {
@@ -128,10 +184,11 @@ export function SettingsPage() {
       />
 
       <Tabs value={currentTab} onValueChange={handleTabChange}>
-        <TabsList>
+        <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="quota">Quota</TabsTrigger>
+          <TabsTrigger value="feedback">Feedback & Requests</TabsTrigger>
           <TabsTrigger value="system">System</TabsTrigger>
           <TabsTrigger value="about">About</TabsTrigger>
         </TabsList>
@@ -430,6 +487,19 @@ export function SettingsPage() {
                       )}
                     </div>
                   )}
+                  {quota.remaining > 0 && (
+                    <div className="flex items-center justify-between p-3.5 rounded-lg border border-border/70 bg-muted/20 text-xs text-muted-foreground">
+                      <span>Need a higher daily allowance for enterprise workloads or high-volume trials?</span>
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="p-0 h-auto text-primary text-xs font-semibold"
+                        onClick={() => handleTabChange("feedback")}
+                      >
+                        Request Quota Increase →
+                      </Button>
+                    </div>
+                  )}
                 </>
               ) : (
                 <p className="text-sm text-muted-foreground">
@@ -438,6 +508,185 @@ export function SettingsPage() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="feedback" className="space-y-6">
+          {isGuest || (AUTH_ENABLED && !me) ? (
+            <Card className="border-primary/20 bg-gradient-to-b from-primary/5 to-transparent">
+              <CardHeader className="text-center pb-2">
+                <div className="mx-auto size-12 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-2">
+                  <Lock className="size-6" />
+                </div>
+                <CardTitle className="text-xl">Registered Account Required</CardTitle>
+                <CardDescription className="max-w-md mx-auto">
+                  Feedback submissions, feature suggestions, and quota increase requests are reserved for registered users.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="text-center pt-2 pb-6">
+                <Button onClick={() => navigate(ROUTES.login, { state: { from: `${ROUTES.settings}#feedback` } })}>
+                  Sign in or Register
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>Send Feedback & Requests</CardTitle>
+                <CardDescription>
+                  Have an idea, found an issue, or need more daily invoice processing capacity? Let our engineering team know directly.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {feedbackSuccess ? (
+                  <div className="py-8 text-center space-y-4">
+                    <div className="mx-auto size-12 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+                      <CheckCircle2 className="size-6" />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="font-semibold text-lg text-foreground">Feedback Received!</h3>
+                      <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                        Thank you for your input. Our team has received your message and will review it shortly.
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setFeedbackSuccess(false)
+                        setFeedbackSubject("")
+                        setFeedbackMessage("")
+                        setFeedbackQuotaLimit("")
+                      }}
+                    >
+                      Send Another Request
+                    </Button>
+                  </div>
+                ) : (
+                  <form onSubmit={(e) => void handleSubmitFeedback(e)} className="space-y-5">
+                    {/* Category selector grid */}
+                    <div className="space-y-2">
+                      <Label>Request Type</Label>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                        {[
+                          { id: "suggestion", label: "Suggestion", icon: Lightbulb, desc: "Feature ideas" },
+                          { id: "quota_increase", label: "Quota Increase", icon: TrendingUp, desc: "More invoices" },
+                          { id: "bug", label: "Bug Report", icon: Bug, desc: "Found an issue" },
+                          { id: "general", label: "General", icon: MessageSquarePlus, desc: "Other feedback" },
+                        ].map((cat) => {
+                          const Icon = cat.icon
+                          const isSelected = feedbackCategory === cat.id
+                          return (
+                            <button
+                              type="button"
+                              key={cat.id}
+                              onClick={() => setFeedbackCategory(cat.id as FeedbackCategory)}
+                              className={cn(
+                                "flex flex-col items-start p-3 rounded-lg border text-left transition-all",
+                                isSelected
+                                  ? "border-primary bg-primary/10 shadow-sm"
+                                  : "border-border/70 hover:border-border hover:bg-muted/40"
+                              )}
+                            >
+                              <div className={cn("size-7 rounded-md flex items-center justify-center mb-2", isSelected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
+                                <Icon className="size-4" />
+                              </div>
+                              <span className="text-xs font-semibold text-foreground">{cat.label}</span>
+                              <span className="text-[10px] text-muted-foreground mt-0.5">{cat.desc}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Subject */}
+                    <div className="space-y-1.5">
+                      <Label htmlFor="feedback-subject">Subject</Label>
+                      <Input
+                        id="feedback-subject"
+                        placeholder={
+                          feedbackCategory === "suggestion"
+                            ? "e.g., Support for CSV line-item export"
+                            : feedbackCategory === "quota_increase"
+                            ? "e.g., Evaluating high volume batch processing"
+                            : feedbackCategory === "bug"
+                            ? "e.g., Discrepancy mismatch on currency conversion"
+                            : "e.g., General thoughts on pipeline visualizer"
+                        }
+                        value={feedbackSubject}
+                        onChange={(e) => setFeedbackSubject(e.target.value)}
+                        required
+                        maxLength={200}
+                      />
+                    </div>
+
+                    {/* Conditional Quota Limit Input */}
+                    {feedbackCategory === "quota_increase" && (
+                      <div className="space-y-1.5 p-3.5 rounded-lg border border-primary/20 bg-primary/5">
+                        <div className="flex items-center justify-between text-xs">
+                          <Label htmlFor="feedback-quota-limit" className="font-semibold">
+                            Requested Daily Limit
+                          </Label>
+                          <span className="text-muted-foreground">
+                            Current limit: <strong className="text-foreground">{quota?.limit ?? me?.daily_invoice_limit ?? 15}</strong> / day
+                          </span>
+                        </div>
+                        <Input
+                          id="feedback-quota-limit"
+                          type="number"
+                          min={(quota?.limit ?? me?.daily_invoice_limit ?? 15) + 1}
+                          max={10000}
+                          placeholder={String((quota?.limit ?? me?.daily_invoice_limit ?? 15) + 20)}
+                          value={feedbackQuotaLimit}
+                          onChange={(e) => setFeedbackQuotaLimit(e.target.value)}
+                          required
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                          Please enter the number of daily invoices you anticipate processing.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Message / Details */}
+                    <div className="space-y-1.5">
+                      <Label htmlFor="feedback-message">
+                        {feedbackCategory === "quota_increase" ? "Use Case & Justification" : "Message / Details"}
+                      </Label>
+                      <Textarea
+                        id="feedback-message"
+                        rows={4}
+                        placeholder={
+                          feedbackCategory === "suggestion"
+                            ? "Describe what you would like to see and why it would be helpful..."
+                            : feedbackCategory === "quota_increase"
+                            ? "Tell us about your team size, expected invoice volume, or trial timeframe..."
+                            : feedbackCategory === "bug"
+                            ? "Steps to reproduce, expected vs actual result, invoice format..."
+                            : "Share your thoughts or questions..."
+                        }
+                        value={feedbackMessage}
+                        onChange={(e) => setFeedbackMessage(e.target.value)}
+                        required
+                        maxLength={3000}
+                      />
+                    </div>
+
+                    <Button
+                      type="submit"
+                      className="gap-2"
+                      disabled={submitFeedbackMutation.isPending}
+                    >
+                      {submitFeedbackMutation.isPending ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Send className="size-4" />
+                      )}
+                      <span>Submit Request</span>
+                    </Button>
+                  </form>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="system" className="space-y-6">
