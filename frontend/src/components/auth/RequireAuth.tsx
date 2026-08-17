@@ -53,18 +53,6 @@ export function RequireAuth() {
     )
   }
 
-  if (!firebaseUser && guestToken && isWritePath(location.pathname)) {
-    return (
-      <Navigate
-        to={ROUTES.login}
-        replace
-        state={{
-          from: location.pathname,
-          reason: "sign_in_required",
-        }}
-      />
-    )
-  }
 
   return <Outlet />
 }

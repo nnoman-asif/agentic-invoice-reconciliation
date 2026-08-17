@@ -8,8 +8,6 @@ from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql import Select
-
-from app.config import SYSTEM_USER_ID
 from app.models.database import (
     DeliveryReceipt,
     Invoice,
@@ -17,6 +15,7 @@ from app.models.database import (
     Vendor,
 )
 
+from app.config import LOCAL_DEV_USER_ID, SYSTEM_USER_ID
 
 def scope_to_owner(
     stmt: Select,
@@ -26,8 +25,18 @@ def scope_to_owner(
     include_system: bool = False,
 ) -> Select:
     """Restrict a select to rows the owner can read."""
-    # We ignore include_system here to ensure regular users get a fresh
-    # workspace and do not see the shared demo reference data.
+    if include_system:
+        # Include system data ONLY for guests and local development
+        from app.models.database import User
+        is_demo_user = select(1).where(
+            (User.id == owner_id) & 
+            ((User.kind == "guest") | (User.id == LOCAL_DEV_USER_ID))
+        ).exists()
+        
+        return stmt.where(
+            (model.owner_id == owner_id) | 
+            ((model.owner_id == SYSTEM_USER_ID) & is_demo_user)
+        )
     return stmt.where(model.owner_id == owner_id)
 
 
