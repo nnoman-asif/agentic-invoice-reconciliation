@@ -76,7 +76,6 @@ export function ExceptionsPage() {
   const [reconMap, setReconMap] = useState<Record<string, string>>({})
   // Inline error inside the bulk dialog when every action failed
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const canWrite = useAuthStore((s) => !AUTH_ENABLED || Boolean(s.firebaseUser))
 
   const approveMut = useApproveException()
   const rejectMut = useRejectException()
@@ -238,22 +237,20 @@ export function ExceptionsPage() {
         actions={
           invoices && invoices.length > 0 ? (
             <div className="flex items-center gap-2">
-              {canWrite && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={toggleAll}
-                  className="gap-2"
-                  aria-pressed={allSelected}
-                >
-                  {allSelected ? (
-                    <CheckCircle2 className="size-4" />
-                  ) : (
-                    <CircleDashed className="size-4" />
-                  )}
-                  {allSelected ? "Deselect all" : "Select all"}
-                </Button>
-              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={toggleAll}
+                className="gap-2"
+                aria-pressed={allSelected}
+              >
+                {allSelected ? (
+                  <CheckCircle2 className="size-4" />
+                ) : (
+                  <CircleDashed className="size-4" />
+                )}
+                {allSelected ? "Deselect all" : "Select all"}
+              </Button>
               <ExportButton
                 data={invoices}
                 columns={EXCEPTION_COLUMNS}
@@ -351,7 +348,6 @@ export function ExceptionsPage() {
               onToggle={() => toggleSelect(inv.id)}
               onAction={openSingle}
               onReconLoaded={(reconId) => registerRecon(inv.id, reconId)}
-              canWrite={canWrite}
             />
           ))}
         </div>
@@ -439,7 +435,6 @@ interface ExceptionCardProps {
   onToggle: () => void
   onAction: (type: ActionType, reconciliationId: string) => void
   onReconLoaded: (reconciliationId: string) => void
-  canWrite?: boolean
 }
 
 function ExceptionCard({
@@ -449,7 +444,6 @@ function ExceptionCard({
   onToggle,
   onAction,
   onReconLoaded,
-  canWrite = true,
 }: ExceptionCardProps) {
   const { data: recon } = useReconciliationByInvoice(invoice.id)
 
@@ -473,13 +467,11 @@ function ExceptionCard({
           {/* Header */}
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3 min-w-0">
-              {canWrite && (
-                <Checkbox
-                  checked={checked}
-                  onCheckedChange={onToggle}
-                  className="mt-1.5"
-                />
-              )}
+              <Checkbox
+                checked={checked}
+                onCheckedChange={onToggle}
+                className="mt-1.5"
+              />
               <div className="size-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
                 <AlertTriangle className="size-5 text-amber-500" />
               </div>
@@ -544,7 +536,7 @@ function ExceptionCard({
           )}
 
           {/* Actions */}
-          {canWrite && recon && (
+          {recon && (
             <div className="flex items-center gap-2 pt-1">
               <Button
                 variant="default"
