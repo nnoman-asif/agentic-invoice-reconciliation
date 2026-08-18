@@ -85,8 +85,7 @@ export function DocumentCompare({ invoice, reconciliation }: Props) {
   //     the parsed line items rendered in the middle column.
   //   * right side = `[data-match-id="<matchId>"]` -- the corresponding
   //     match card on the right.
-  // Throttled with requestAnimationFrame so we don't recompute hundreds
-  // of times per scroll tick (was the cause of bug M7).
+  // Throttled with requestAnimationFrame to optimize rendering during scrolling.
   useEffect(() => {
     const middle = middleRef.current
     if (!middle) return

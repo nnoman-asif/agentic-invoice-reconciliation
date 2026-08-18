@@ -248,13 +248,8 @@ export function useLivePipeline(invoiceId: string | undefined) {
       invoice,
       isProcessing,
       isFailed,
-      // Whole-pipeline wall time. Surface this once at the top of the
-      // visualizer instead of attaching it to a single stage -- the
-      // previous code stuck this on stages[3] which made it look like
-      // the resolution agent took 34s when in reality the parser was
-      // the slow one. Withheld until the catch-up animation reaches
-      // the final node so the header doesn't trumpet "Total time" on
-      // top of a still-spinning visualization.
+      // Whole-pipeline wall time. Withheld until the catch-up animation reaches
+      // the final node so the header displays total elapsed time on completion.
       totalProcessingMs:
         currentIndex === 4 ? recon?.processing_time_ms ?? null : null,
       displayedStatus,

@@ -346,11 +346,7 @@ async def _persist_results(
         if not inv_line_id and db_line_items:
             inv_line_id = db_line_items[min(i, len(db_line_items) - 1)].id
 
-        # If we still have no real invoice_line_item to associate with,
-        # skip the match rather than insert a row with a dangling FK.
-        # (The original code used `or db_line_items[0].id if db_line_items
-        # else uuid.uuid4()`, which due to operator precedence could
-        # produce a random UUID -> guaranteed FK violation. Bug L9.)
+        # Skip match if no valid invoice line item exists to prevent foreign key violation.
         if not inv_line_id:
             logger.warning(
                 f"[InvoiceService] Skipping line_item_match #{i + 1} for invoice "

@@ -65,13 +65,6 @@ export default function App() {
   //   * This inner boundary is keyed by route path so a page-level crash
   //     resets the moment the user navigates somewhere else, instead of
   //     leaving them stuck on the fallback screen forever.
-  //
-  // Note on AnimatePresence: an earlier revision wrapped these routes in
-  // <AnimatePresence mode="wait"> for page exit animations. None of the
-  // pages actually define an `exit` prop, though, so the wait mode would
-  // hang indefinitely waiting for an exit that never fires -- the
-  // observable symptom was the URL changing to e.g. /invoices while the
-  // previous page (Vendors) stayed mounted. Removed.
   return (
     <>
       <PageLoadingBar />

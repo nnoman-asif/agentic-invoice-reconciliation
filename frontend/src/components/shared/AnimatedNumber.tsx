@@ -15,9 +15,7 @@ export function AnimatedNumber({
   format,
   className,
 }: AnimatedNumberProps) {
-  // Initialize from the actual value so the first paint already shows
-  // the correct number. Previously we initialized from 0 and animated
-  // up, which made formatted metrics flash "0ms" / "0.0s" briefly.
+  // Initialize from the actual value so the first paint already shows the correct number.
   const [display, setDisplay] = useState(value)
   const startRef = useRef<number | null>(null)
   const fromRef = useRef(value)

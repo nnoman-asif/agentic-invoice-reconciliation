@@ -54,10 +54,7 @@ export function InvoiceDetailPage() {
     invoiceProcessingStatus: invoice?.processing_status,
   })
 
-  // Trigger confetti once per approved invoice (auto OR manual). Track
-  // a Set of celebrated ids in a ref so revisiting an already-celebrated
-  // invoice in the same session does NOT re-fire (bug H6) and so manual
-  // approvals also celebrate (bug M3).
+  // Trigger confetti once per approved invoice (auto or manual) and deduplicate across session views.
   const celebratedRef = useRef<Set<string>>(new Set())
   const successBadgeRef = useRef<HTMLDivElement>(null)
   useEffect(() => {

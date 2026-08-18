@@ -106,10 +106,7 @@ def resolve(state: dict) -> dict:
         "match_type": match_type,
         "overall_status": overall_status,
         "confidence_score": confidence,
-        # Just the bare verdict word (approve / review / reject). The UI
-        # adds its own label (e.g. "Agent recommendation: <verdict>"),
-        # so the previous "Recommendation: review" prefix produced
-        # redundant text like "Recommendation: Recommendation: review".
+        # Normalized verdict word ('approve', 'review', or 'reject')
         "agent_recommendation": recommendation,
         "recommendation_reasoning": reasoning,
     }

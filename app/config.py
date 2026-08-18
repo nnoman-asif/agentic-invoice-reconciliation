@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings
 import uuid
 
 
-# Hardcoded bootstrap user IDs — also inserted by setup_db.py.
+# Default bootstrap user IDs — also inserted by setup_db.py.
 # System owns the shared demo reference data; local-dev is returned by
 # get_current_owner when auth is disabled.
 SYSTEM_USER_ID = uuid.UUID("00000000-0000-4000-8000-000000000001")
@@ -83,7 +83,7 @@ class Settings(BaseSettings):
     # Only trust CF-Connecting-IP when the app sits behind the Cloudflare Worker.
     trust_proxy_header: bool = False
 
-    # Rate limits / queue fairness (Commit 12)
+    # Rate limits and queue concurrency control
     upload_rate_per_minute: int = 3
     max_inflight_per_user: int = 1
     # Safety TTL so a crashed worker cannot permanently hold a slot.
@@ -91,11 +91,11 @@ class Settings(BaseSettings):
     provider_rpm_limit: int = 20
     provider_retry_max: int = 4
 
-    # Daily quota (Commit 13) — charged at provider call, not upload
+    # Daily quota limits — charged on provider LLM execution, not upload
     daily_invoice_limit_default: int = 15
     global_chat_daily_cap: int = 1000
 
-    # Quota increase Discord notify (Commit 14). Real URL belongs in .env only.
+    # Discord webhook URL for quota increase and administrative alerts
     discord_webhook_url: str | None = None
 
     @property

@@ -54,8 +54,8 @@ def parse_invoice(state: dict) -> dict:
     raw_file_path = state.get("raw_file_path", "")
     content_type = state.get("file_content_type")
 
-    # Prefer text captured at upload (Commit 10); fall back to on-disk extract
-    # for older rows / demo copies that skipped the upload gate.
+    # Prefer text captured during upload; fall back to on-disk extract
+    # for rows that skipped the initial upload gate.
     raw_text = (state.get("raw_text") or "").strip()
     if not raw_text:
         try:

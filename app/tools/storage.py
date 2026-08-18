@@ -42,9 +42,9 @@ class LocalDiskStorage:
         candidate = self.path_for(name)
         if candidate.exists():
             return candidate
-        # Fall back to path relative to CWD (legacy writes)
-        legacy = Path(stored)
-        return legacy if legacy.exists() else None
+        # Fall back to path relative to CWD if file exists
+        fallback = Path(stored)
+        return fallback if fallback.exists() else None
 
     def write_bytes(self, name: str, data: bytes) -> str:
         """Write bytes and return the relative path stored in the DB."""

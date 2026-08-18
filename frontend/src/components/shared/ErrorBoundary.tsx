@@ -25,7 +25,7 @@ export class ErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    // Log to console for now; in prod you'd send to Sentry/Langfuse here
+    // Log uncaught boundary error to telemetry console
     console.error("[ErrorBoundary]", error, errorInfo)
   }
 

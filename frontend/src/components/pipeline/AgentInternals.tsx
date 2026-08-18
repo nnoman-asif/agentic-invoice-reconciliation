@@ -1,22 +1,15 @@
 import {
   Code2,
-  FileInput,
-  FileOutput,
   Loader2,
   Clock,
   CheckCircle2,
   AlertCircle,
+  Sparkles,
 } from "lucide-react"
 
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs"
 import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import type {
-  AgentStage,
   AgentStageState,
   StageStatus,
 } from "@/hooks/useLivePipeline"
@@ -30,53 +23,59 @@ export function AgentInternals({ stage }: Props) {
   return (
     <Card>
       <CardContent className="p-0">
-        <Tabs defaultValue="input" className="w-full">
-          <div className="px-6 pt-5 flex items-center justify-between gap-3 flex-wrap">
-            <div>
+        <div className="px-6 pt-5 flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <div className="flex items-center gap-2">
               <h3 className="text-lg font-semibold">{stage.label} Agent</h3>
-              <p className="text-sm text-muted-foreground">
-                {stage.description}
-              </p>
+              <StageBadge status={stage.status} />
             </div>
-            <TabsList>
-              <TabsTrigger value="input">
-                <FileInput className="size-3.5" />
-                Input
-              </TabsTrigger>
-              <TabsTrigger value="output">
-                <FileOutput className="size-3.5" />
-                Output
-              </TabsTrigger>
-            </TabsList>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {stage.description}
+            </p>
           </div>
+        </div>
 
-          <TabsContent value="input" className="p-0 m-0">
-            <StageBody
-              label="Input shape"
-              status={stage.status}
-              hasData={!!stage.output}
-              content={JSON.stringify(getStageInputShape(stage.id), null, 2)}
-              runningHint="The agent is processing right now - input is being consumed."
-              completedHint="See live data in the pipeline state above. Schema:"
-            />
-          </TabsContent>
-
-          <TabsContent value="output" className="p-0 m-0">
-            <StageBody
-              label="Last output"
-              status={stage.status}
-              hasData={!!stage.output}
-              content={
-                stage.output ? JSON.stringify(stage.output, null, 2) : ""
-              }
-              runningHint="Agent is still executing - output will appear once this stage completes."
-              completedHint="Output captured from the last run:"
-            />
-          </TabsContent>
-        </Tabs>
+        <StageBody
+          label="Execution Output"
+          status={stage.status}
+          hasData={!!stage.output}
+          content={
+            stage.output ? JSON.stringify(stage.output, null, 2) : ""
+          }
+          runningHint="Agent is executing in real-time — live output will stream once complete."
+          completedHint="Live results produced by this agent:"
+        />
       </CardContent>
     </Card>
   )
+}
+
+function StageBadge({ status }: { status: StageStatus }) {
+  switch (status) {
+    case "idle":
+      return <Badge variant="muted">Queued</Badge>
+    case "running":
+      return (
+        <Badge variant="default" className="gap-1.5 animate-pulse">
+          <Loader2 className="size-3 animate-spin" />
+          Processing
+        </Badge>
+      )
+    case "completed":
+      return (
+        <Badge variant="success" className="gap-1">
+          <CheckCircle2 className="size-3" />
+          Completed
+        </Badge>
+      )
+    case "error":
+      return (
+        <Badge variant="destructive" className="gap-1">
+          <AlertCircle className="size-3" />
+          Failed
+        </Badge>
+      )
+  }
 }
 
 function StageBody({
@@ -99,8 +98,8 @@ function StageBody({
     return (
       <StagePlaceholder
         icon={<Clock className="size-4" />}
-        title="Waiting to run"
-        body="An earlier stage is still in progress. This panel will fill in as the pipeline reaches it."
+        title="Waiting to execute"
+        body="Previous stages are running. Live results will populate automatically as the pipeline advances."
       />
     )
   }
@@ -110,7 +109,7 @@ function StageBody({
     return (
       <StagePlaceholder
         icon={<Loader2 className="size-4 animate-spin" />}
-        title="Running…"
+        title="Executing agent logic…"
         body={runningHint}
         accent="primary"
       />
@@ -122,16 +121,15 @@ function StageBody({
     return (
       <StagePlaceholder
         icon={<AlertCircle className="size-4" />}
-        title="Failed"
-        body="This stage errored out. See the invoice's error message for details."
+        title="Execution failed"
+        body="This agent encountered an error during processing. Review the error message for details."
         accent="destructive"
       />
     )
   }
 
   // Completed: render the data when we have it; otherwise note that
-  // the recon row hasn't streamed in yet (rare, very brief window
-  // between status=completed and recon GET landing).
+  // the recon row hasn't streamed in yet.
   if (!hasData) {
     return (
       <StagePlaceholder
@@ -163,7 +161,6 @@ function StageBody({
   )
 }
 
-
 function StagePlaceholder({
   icon,
   title,
@@ -194,35 +191,4 @@ function StagePlaceholder({
       </div>
     </div>
   )
-}
-
-function getStageInputShape(stage: AgentStage): Record<string, unknown> {
-  switch (stage) {
-    case "parser":
-      return {
-        invoice_id: "uuid",
-        raw_file_path: "uploads/invoices/<uuid>.pdf",
-        file_content_type: "application/pdf",
-      }
-    case "matcher":
-      return {
-        invoice_number: "string | null",
-        vendor_name: "string | null",
-        vendor_tax_id: "string | null",
-        po_reference: "string | null",
-        line_items: "Array<{ description, quantity, unit_price, ... }>",
-      }
-    case "anomaly":
-      return {
-        line_item_matches: "Array<LineItemMatch>",
-        matched_po: "PurchaseOrder | null",
-        vendor_found: "boolean",
-        is_duplicate: "boolean",
-      }
-    case "resolution":
-      return {
-        discrepancies: "Array<Discrepancy>",
-        line_item_matches: "Array<LineItemMatch>",
-      }
-  }
 }

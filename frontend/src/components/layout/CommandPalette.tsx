@@ -41,10 +41,7 @@ export function CommandPalette() {
   const { data: invoices } = useInvoices()
   const [search, setSearch] = useState("")
 
-  // Bind once and always read the freshest store value imperatively.
-  // Previously the deps `[open, setOpen]` rebuilt the listener on every
-  // toggle and `setOpen(!open)` captured a stale `open`, which under
-  // StrictMode double-invocation could occasionally miss the toggle.
+  // Bind global keyboard listener once and read freshest store state imperatively.
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if ((e.key === "k" || e.key === "K") && (e.metaKey || e.ctrlKey)) {

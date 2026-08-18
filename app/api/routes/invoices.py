@@ -174,9 +174,7 @@ async def upload_invoice(
     )
     db.add(invoice)
 
-    # COMMIT BEFORE ENQUEUE -- otherwise the worker can race ahead and
-    # see "invoice not found" because the upload's transaction is still
-    # open (this was bug C3).
+    # Commit transaction before queuing worker job to prevent race conditions.
     try:
         await db.commit()
         await db.refresh(invoice)
